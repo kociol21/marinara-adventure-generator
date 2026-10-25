@@ -379,3 +379,4 @@ Ustalenia z użytkownikiem, ważniejsze od wcześniejszych zapisów, jeśli są 
 4. **ChatGPT/Codex.** Do sprawdzenia; plan awaryjny to API Nano-GPT (sekcja 13).
 5. **Stos technologiczny.** Bez preferencji użytkownika. Wybór należy do wykonawcy i ma wynikać z weryfikacji technicznej.
 6. **Repozytorium.** Projekt ma trafić na GitHub użytkownika. Wymaga skonfigurowania dostępu (np. `gh auth login`) na tym komputerze.
+7. **Push to Marinara w wersji 1.** Bezpośrednia integracja przez REST API (tworzenie nowych zasobów, czatu, zasiew Secret Plot, wektoryzacja) wchodzi do pierwszej wersji jako opcjonalna akcja obok eksportu. To zmienia zakres opisany w sekcji 18. Uzasadnienie: [docs/01-weryfikacja-techniczna.md](docs/01-weryfikacja-techniczna.md).

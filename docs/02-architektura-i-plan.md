@@ -122,9 +122,9 @@ Zawartość zipa:
   director/secret-plot.sealed.json   tylko do etapu 2; nie do ręcznego czytania
 ```
 
-## 6. Integracja bezpośrednia (etap 2, API potwierdzone w kodzie)
+## 6. Integracja bezpośrednia „Push to Marinara” (wersja 1, opcjonalna akcja)
 
-Klient REST Marinary tworzy wyłącznie nowe zasoby:
+Decyzja z 25 października 2026 r.: integracja wchodzi do wersji 1 jako opcjonalna akcja obok eksportu plikowego. Eksport pozostaje pełnoprawną drogą. Klient REST Marinary tworzy wyłącznie nowe zasoby:
 
 1. `POST /api/characters`, `POST /api/lorebooks` (+ `/:id/entries/bulk`) oraz persona. Linkowanie i filtry dostają prawdziwe ID docelowej instalacji.
 2. `POST /api/chats` (mode `roleplay`, characterIds, personaId). Metadata czatu: `enableAgents`, `activeLorebookIds`, `activeAgentIds: ["director"]`, `narrativeDirectorSecretPlotEnabled`. Warunek: w Marinarze musi być zainstalowany pakiet `director`. Aplikacja sprawdza to przed wysłaniem i nie instaluje go sama bez twojej zgody.
@@ -134,7 +134,7 @@ Klient REST Marinary tworzy wyłącznie nowe zasoby:
 
 Uwierzytelnienie: VPS wymaga loginu przez Tailscale Serve (401 bez niego). Aplikacja potrzebuje danych logowania Marinary w magazynie systemowym. Testy integracyjne idą najpierw na lokalną instancję.
 
-**Rekomendacja:** przenieść kroki 1–3 do wersji 1 jako opcjonalną akcję „Push to Marinara”. Bez API Secret Plot da się zasiać tylko ręcznie, a to wymaga od ciebie przeczytania sekretów. Decyzja należy do ciebie.
+Powód włączenia do wersji 1: bez API Secret Plot da się zasiać tylko ręcznie, a to wymaga od ciebie przeczytania sekretów. Push nigdy nie nadpisuje istniejących zasobów. Przed wysłaniem pokazuje bezspoilerowe podsumowanie tego, co zostanie utworzone, i czeka na potwierdzenie.
 
 ## 7. Plan realizacji wersji 1
 
@@ -148,6 +148,6 @@ Uwierzytelnienie: VPS wymaga loginu przez Tailscale Serve (401 bez niego). Aplik
 | M5. Audyt | Walidatory kodu, duplikaty (n-gramy, embeddingi, LLM), logika zagadki, spoilery w polach jawnych, budżety | Raport bezspoilerowy; poprawki z limitem prób |
 | M6. Awatary | Prompt z `appearance` i wspólnego stylu, generowanie, ponowienie, pominięcie | Awatar osadzony w karcie; ponowienie nie rusza reszty |
 | M7. Eksport | Zip, START-HERE, manifest, raport | Kryteria akceptacji 1–12 sprawdzone na neutralnej przygodzie |
-| M8 (opcjonalny w v1). Push | Klient REST Marinary, kroki 1–4 z sekcji 6 | Nowy czat z zasianym Secret Plot na lokalnej Marinarze |
+| M8. Push to Marinara | Klient REST Marinary, kroki 1–5 z sekcji 6, dane logowania w magazynie systemowym, sprawdzenie pakietu `director` | Nowy czat z zasianym Secret Plot, przypiętymi lorebookami i wektorami na lokalnej Marinarze; potem próba na VPS |
 
 Testy automatyczne: walidatory formatów, symulator aktywacji, orkiestrator (wznowienie, unieważnianie), mapowanie eksportu z porównaniem do importu w lokalnej Marinarze. Testy wywołujące płatne modele uruchamiamy tylko ręcznie, za twoją zgodą.
