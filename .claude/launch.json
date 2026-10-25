@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "marinara-test",
+      "runtimeExecutable": "node",
+      "runtimeArgs": ["tools/marinara-test/start.mjs"],
+      "port": 7870
+    }
+  ]
+}
