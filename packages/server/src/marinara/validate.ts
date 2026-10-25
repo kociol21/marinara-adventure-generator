@@ -74,7 +74,7 @@ export function validatePackage(pkg: AdventurePackage): PackageIssue[] {
     add(
       "info",
       "extra-greetings",
-      `${otherGreetings.map((c) => `"${c.name}"`).join(", ")} also have first messages; only the opening card's greeting starts the shared scene.`,
+      `${otherGreetings.map((c) => `"${c.name}"`).join(", ")} also ${otherGreetings.length === 1 ? "has a first message" : "have first messages"}; only the opening card's greeting starts the shared scene.`,
     );
   }
 

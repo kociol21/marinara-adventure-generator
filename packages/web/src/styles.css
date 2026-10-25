@@ -372,6 +372,67 @@ code {
   color: var(--text);
 }
 
+.stages {
+  list-style: none;
+  padding: 0;
+  margin: 12px 0;
+  display: grid;
+  gap: 6px;
+}
+
+.stage {
+  display: grid;
+  grid-template-columns: 20px 1fr auto auto;
+  gap: 4px 10px;
+  align-items: center;
+}
+
+.stage-done .stage-icon {
+  color: #2e7d32;
+}
+
+.stage-failed .stage-icon {
+  color: var(--danger);
+}
+
+.stage-running .stage-icon {
+  color: var(--accent);
+}
+
+.stage-error,
+.stage-detail {
+  grid-column: 2 / -1;
+  margin: 0;
+}
+
+.stage-detail {
+  white-space: pre-wrap;
+  word-break: break-word;
+  background: var(--bg);
+  padding: 6px 8px;
+  border-radius: 6px;
+}
+
+.small-button {
+  padding: 2px 10px;
+  font-size: 0.85rem;
+}
+
+a.button {
+  display: inline-block;
+  padding: 8px 12px;
+  border-radius: 6px;
+  background: var(--accent);
+  color: var(--accent-text);
+  text-decoration: none;
+}
+
+.teaser {
+  font-style: italic;
+  border-left: 3px solid var(--border);
+  padding-left: 12px;
+}
+
 .req-form .row .field {
   flex: 1;
   min-width: 140px;

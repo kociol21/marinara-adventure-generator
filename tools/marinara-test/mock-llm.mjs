@@ -2,7 +2,7 @@
 // (the final prompt) to a JSONL file and answers with canned text. No network, no cost.
 // Usage: node mock-llm.mjs [port] [logFile]
 import { createServer } from "node:http";
-import { appendFileSync } from "node:fs";
+import { appendFileSync, readFileSync } from "node:fs";
 
 const port = Number(process.argv[2] ?? 7999);
 const logFile = process.argv[3] ?? "mock-llm-requests.jsonl";
@@ -43,9 +43,22 @@ function interviewReply(messages) {
   });
 }
 
+const fixture = JSON.parse(readFileSync(new URL("./pipeline-fixture.json", import.meta.url), "utf8"));
+
+/** Pipeline stages answer from the neutral probe fixture. */
+export function stageReply(system) {
+  const stage = system.match(/^Stage: (\w+)/m)?.[1];
+  if (!stage) return null;
+  if (stage === "card") return JSON.stringify(fixture.cards[system.match(/^Card key: (\S+)/m)[1]]);
+  if (stage === "lorebook") return JSON.stringify(fixture.lorebooks[system.match(/^Lorebook: (\w+)/m)[1]]);
+  return JSON.stringify(fixture[stage]);
+}
+
 function reply(body) {
   const system = (body.messages ?? []).find((m) => m.role === "system")?.content ?? "";
   if (system.includes("You interview a player")) return interviewReply(body.messages);
+  const staged = stageReply(system);
+  if (staged) return staged;
   const text = JSON.stringify(body.messages ?? body.input ?? "");
   if (text.includes("overarchingArc")) {
     return JSON.stringify({

@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { Project } from "@adv/shared";
 import { api } from "../api.ts";
 import { Interview } from "../components/Interview.tsx";
+import { Generation } from "../components/Generation.tsx";
 
 export function ProjectPage() {
   const { id = "" } = useParams();
@@ -54,7 +55,10 @@ export function ProjectPage() {
         <dd>{new Date(project.data.createdAt).toLocaleString()}</dd>
       </dl>
 
+      {project.data.teaser && <p className="teaser">{project.data.teaser}</p>}
+
       <Interview projectId={id} />
+      {project.data.status !== "draft" && project.data.status !== "interview" && <Generation projectId={id} />}
 
       <div className="danger-zone">
         <button

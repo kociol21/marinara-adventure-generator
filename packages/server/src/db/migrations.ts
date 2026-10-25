@@ -90,4 +90,22 @@ export const migrations: string[] = [
     created_at     TEXT NOT NULL
   );
   `,
+  `
+  -- One row per pipeline stage of a project. output holds hidden story content.
+  CREATE TABLE stage_run (
+    project_id    TEXT NOT NULL REFERENCES project(id) ON DELETE CASCADE,
+    stage         TEXT NOT NULL,
+    status        TEXT NOT NULL,
+    input_hash    TEXT,
+    output        TEXT,
+    output_hash   TEXT,
+    summary       TEXT,
+    error         TEXT,
+    error_detail  TEXT,
+    attempts      INTEGER NOT NULL DEFAULT 0,
+    started_at    TEXT,
+    finished_at   TEXT,
+    PRIMARY KEY (project_id, stage)
+  );
+  `,
 ];

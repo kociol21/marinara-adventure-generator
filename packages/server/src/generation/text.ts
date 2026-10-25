@@ -9,6 +9,8 @@ export class GenerationError extends Error {
   constructor(
     message: string,
     readonly code: "not-assigned" | "provider" | "invalid-output",
+    /** May quote hidden content; shown only behind "Show spoilers". */
+    readonly detail?: string,
   ) {
     super(message);
   }
@@ -74,23 +76,38 @@ export function createTextGenerator(db: Db, connections: ConnectionsRepo, deps: 
    * Generate and validate a JSON reply. One repair round tells the model what was wrong;
    * the cap keeps a confused model from looping (spec §15).
    */
-  async function generateJson<S extends z.ZodType>(schema: S, req: GenerateRequest, repairAttempts = 1): Promise<z.infer<S>> {
+  async function generateJson<S extends z.ZodType>(
+    schema: S,
+    req: GenerateRequest,
+    repairAttempts = 1,
+    /** Extra checks done by code; their problems go back to the model like format errors. */
+    check?: (value: z.infer<S>) => string[],
+  ): Promise<z.infer<S>> {
     const messages = [...req.messages];
     for (let attempt = 0; ; attempt++) {
       const reply = await generate({ ...req, messages });
       let problem: string;
+      let checkFailed = false;
       try {
         const parsed = schema.safeParse(extractJson(reply));
-        if (parsed.success) return parsed.data;
-        problem = parsed.error.issues
-          .slice(0, 8)
-          .map((i) => `${i.path.join(".") || "(root)"}: ${i.message}`)
-          .join("; ");
+        if (parsed.success) {
+          const problems = check?.(parsed.data) ?? [];
+          if (problems.length === 0) return parsed.data;
+          checkFailed = true;
+          problem = problems.slice(0, 12).join("; ");
+        } else {
+          problem = parsed.error.issues
+            .slice(0, 8)
+            .map((i) => `${i.path.join(".") || "(root)"}: ${i.message}`)
+            .join("; ");
+        }
       } catch (error) {
         problem = error instanceof Error ? error.message : "Invalid JSON.";
       }
       if (attempt >= repairAttempts) {
-        throw new GenerationError(`The model's reply did not match the expected format (${problem}).`, "invalid-output");
+        throw checkFailed
+          ? new GenerationError(`The output failed ${problem.split("; ").length} consistency check(s) after ${attempt + 1} attempt(s).`, "invalid-output", problem)
+          : new GenerationError(`The model's reply did not match the expected format (${problem}).`, "invalid-output");
       }
       messages.push(
         { role: "assistant", content: reply },

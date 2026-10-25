@@ -1,0 +1,118 @@
+{
+  "plan": {
+    "premise": "PLAN_PREMISE (neutral probe, no real story)",
+    "isMystery": true,
+    "truth": {
+      "summary": "PLAN_TRUTH_SUMMARY",
+      "timeline": [
+        { "when": "Day 1", "what": "PLAN_TIMELINE_1" },
+        { "when": "Day 2", "what": "PLAN_TIMELINE_2" }
+      ],
+      "culprit": "gamma",
+      "motive": "PLAN_MOTIVE",
+      "method": "PLAN_METHOD"
+    },
+    "entities": [
+      { "key": "alpha", "type": "character", "name": "Probe Alpha", "aliases": ["Alpha"], "publicDescription": "A probe character.", "role": "PLAN_ROLE_ALPHA", "isCard": true },
+      { "key": "beta", "type": "character", "name": "Probe Beta", "aliases": ["Beta"], "publicDescription": "Another probe character.", "role": "PLAN_ROLE_BETA", "isCard": true },
+      { "key": "gamma", "type": "character", "name": "Probe Gamma", "aliases": [], "publicDescription": "A minor probe character.", "role": "PLAN_ROLE_GAMMA", "isCard": false },
+      { "key": "harbor", "type": "location", "name": "Probe Harbor", "aliases": ["the harbor"], "publicDescription": "A probe location.", "role": "", "isCard": false },
+      { "key": "office", "type": "location", "name": "Probe Office", "aliases": [], "publicDescription": "Another probe location.", "role": "", "isCard": false },
+      { "key": "ledger", "type": "item", "name": "Probe Ledger", "aliases": ["the ledger"], "publicDescription": "A probe item.", "role": "PLAN_ROLE_LEDGER", "isCard": false },
+      { "key": "guild", "type": "organization", "name": "Probe Guild", "aliases": [], "publicDescription": "A probe organization.", "role": "", "isCard": false }
+    ],
+    "threads": [{ "key": "ledger-thread", "name": "Ledger", "description": "PLAN_THREAD" }],
+    "openingCardKey": "alpha"
+  },
+  "facts": {
+    "facts": [
+      { "id": "f1", "subject": "harbor", "statement": "FACT_HARBOR", "layer": "public", "holder": null, "contradicts": null, "secrecy": "public", "home": { "kind": "lorebook", "lorebook": "world" } },
+      { "id": "f2", "subject": "office", "statement": "FACT_OFFICE", "layer": "public", "holder": null, "contradicts": null, "secrecy": "public", "home": { "kind": "lorebook", "lorebook": "world" } },
+      { "id": "f3", "subject": "guild", "statement": "FACT_GUILD", "layer": "public", "holder": null, "contradicts": null, "secrecy": "public", "home": { "kind": "lorebook", "lorebook": "world" } },
+      { "id": "f4", "subject": "ledger", "statement": "FACT_LEDGER_TRUTH", "layer": "truth", "holder": null, "contradicts": null, "secrecy": "secret", "home": { "kind": "lorebook", "lorebook": "plot" } },
+      { "id": "f5", "subject": "gamma", "statement": "FACT_GAMMA", "layer": "truth", "holder": null, "contradicts": null, "secrecy": "hidden", "home": { "kind": "lorebook", "lorebook": "characters" } },
+      { "id": "f6", "subject": "ledger", "statement": "FACT_BETA_BELIEF", "layer": "belief", "holder": "beta", "contradicts": null, "secrecy": "hidden", "home": { "kind": "lorebook", "lorebook": "plot" } },
+      { "id": "f7", "subject": "ledger", "statement": "FACT_ALPHA_CLAIM", "layer": "claim", "holder": "alpha", "contradicts": "f4", "secrecy": "hidden", "home": { "kind": "lorebook", "lorebook": "plot" } },
+      { "id": "f8", "subject": "alpha", "statement": "FACT_ALPHA_IDENTITY", "layer": "truth", "holder": null, "contradicts": null, "secrecy": "public", "home": { "kind": "card", "card": "alpha", "field": "description" } },
+      { "id": "f9", "subject": "alpha", "statement": "FACT_ALPHA_TEMPER", "layer": "truth", "holder": null, "contradicts": null, "secrecy": "public", "home": { "kind": "card", "card": "alpha", "field": "personality" } },
+      { "id": "f10", "subject": "beta", "statement": "FACT_BETA_PAST", "layer": "truth", "holder": null, "contradicts": null, "secrecy": "hidden", "home": { "kind": "card", "card": "beta", "field": "backstory" } },
+      { "id": "f11", "subject": "beta", "statement": "FACT_BETA_LOOK", "layer": "public", "holder": null, "contradicts": null, "secrecy": "public", "home": { "kind": "card", "card": "beta", "field": "appearance" } },
+      { "id": "f12", "subject": "harbor", "statement": "FACT_PREMISE", "layer": "public", "holder": null, "contradicts": null, "secrecy": "public", "home": { "kind": "lorebook", "lorebook": "world" } }
+    ]
+  },
+  "clues": {
+    "conclusions": [{ "id": "c1", "statement": "CLUE_CONCLUSION", "factIds": ["f4"] }],
+    "clues": [
+      { "id": "k1", "conclusionId": "c1", "where": "harbor", "how": "CLUE_HARBOR", "factId": null },
+      { "id": "k2", "conclusionId": "c1", "where": "office", "how": "CLUE_OFFICE", "factId": null },
+      { "id": "k3", "conclusionId": "c1", "where": "gamma", "how": "CLUE_GAMMA", "factId": "f5" }
+    ],
+    "redHerrings": [{ "id": "h1", "statement": "CLUE_HERRING", "explanation": "CLUE_HERRING_EXPLANATION" }]
+  },
+  "cards": {
+    "alpha": {
+      "name": "Probe Alpha",
+      "tags": ["probe"],
+      "description": "CARD_ALPHA_DESCRIPTION",
+      "personality": "CARD_ALPHA_PERSONALITY",
+      "backstory": "CARD_ALPHA_BACKSTORY",
+      "appearance": "CARD_ALPHA_APPEARANCE",
+      "imageAppearance": "probe, portrait",
+      "scenario": "CARD_ALPHA_SCENARIO",
+      "firstMessage": "",
+      "exampleDialogue": "<START>\n{{user}}: Hello.\n{{char}}: CARD_ALPHA_EXAMPLE"
+    },
+    "beta": {
+      "name": "Probe Beta",
+      "tags": ["probe"],
+      "description": "CARD_BETA_DESCRIPTION",
+      "personality": "CARD_BETA_PERSONALITY",
+      "backstory": "CARD_BETA_BACKSTORY",
+      "appearance": "CARD_BETA_APPEARANCE",
+      "scenario": "CARD_BETA_SCENARIO",
+      "firstMessage": "CARD_BETA_FIRST_MESSAGE",
+      "exampleDialogue": "<START>\n{{user}}: Hello.\n{{char}}: CARD_BETA_EXAMPLE"
+    }
+  },
+  "persona": {
+    "name": "Probe Investigator",
+    "tags": ["probe"],
+    "description": "PERSONA_DESCRIPTION",
+    "personality": "PERSONA_PERSONALITY",
+    "backstory": "PERSONA_BACKSTORY",
+    "appearance": "PERSONA_APPEARANCE",
+    "scenario": "PERSONA_SCENARIO",
+    "exampleDialogue": ""
+  },
+  "lorebooks": {
+    "world": {
+      "entries": [
+        { "key": "premise", "name": "Premise", "content": "LORE_PREMISE", "type": "constant", "order": 10, "factIds": ["f12"] },
+        { "key": "harbor", "name": "Harbor", "content": "LORE_HARBOR", "keys": ["Probe Harbor", "the harbor"], "factIds": ["f1"] },
+        { "key": "office", "name": "Office", "content": "LORE_OFFICE", "keys": ["Probe Office"], "factIds": ["f2"] },
+        { "key": "guild", "name": "Guild", "content": "LORE_GUILD", "keys": ["Probe Guild", "the guild"], "factIds": ["f3"] }
+      ]
+    },
+    "characters": {
+      "entries": [{ "key": "gamma", "name": "Gamma", "content": "LORE_GAMMA", "keys": ["Probe Gamma", "Gamma"], "matchWholeWords": true, "factIds": ["f5"] }]
+    },
+    "plot": {
+      "entries": [
+        { "key": "ledger-truth", "name": "Ledger truth", "content": "LORE_LEDGER_SECRET", "keys": ["ledger"], "order": 20, "factIds": ["f4"] },
+        { "key": "beta-belief", "name": "Beta belief", "content": "LORE_BETA_BELIEF", "keys": ["ledger"], "privateTo": ["beta"], "factIds": ["f6"] },
+        { "key": "alpha-claim", "name": "Alpha claim", "content": "LORE_ALPHA_CLAIM", "keys": ["ledger", "account book"], "privateTo": ["alpha"], "factIds": ["f7"] }
+      ]
+    }
+  },
+  "opening": {
+    "teaser": "A neutral probe adventure at a probe harbor.",
+    "openingMessage": "OPENING_MESSAGE_ALPHA",
+    "secretPlot": {
+      "description": "SECRET_PLOT_ARC",
+      "protagonistArc": "SECRET_PLOT_PROTAGONIST",
+      "characterArc": "SECRET_PLOT_CHARACTER",
+      "sceneDirections": ["SECRET_BEAT_1", "SECRET_BEAT_2", "SECRET_BEAT_3"],
+      "pacing": "steady"
+    }
+  }
+}

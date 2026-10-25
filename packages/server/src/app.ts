@@ -20,6 +20,9 @@ import { createInterviewRepo } from "./repos/interview.ts";
 import { createInterviewService } from "./interview/interview.ts";
 import { createTextGenerator } from "./generation/text.ts";
 import { interviewRoutes } from "./routes/interview.ts";
+import { generationRoutes } from "./routes/generation.ts";
+import { createPipeline } from "./pipeline/runner.ts";
+import { createStagesRepo } from "./repos/stages.ts";
 
 export interface AppDeps {
   db: Db;
@@ -61,13 +64,24 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
   const fetchFn = deps.fetch ?? fetch;
   const adapterDeps = { fetch: fetchFn, codexAuth: deps.codexAuth ?? createCodexAuth({ fetch: fetchFn }) };
   const text = createTextGenerator(deps.db, repos.connections, adapterDeps);
-  const interview = createInterviewService({ interview: createInterviewRepo(deps.db), projects: repos.projects, text });
+  const interviewRepo = createInterviewRepo(deps.db);
+  const interview = createInterviewService({ interview: interviewRepo, projects: repos.projects, text });
+  const pipeline = createPipeline({
+    stages: createStagesRepo(deps.db),
+    interview: interviewRepo,
+    projects: repos.projects,
+    settings: repos.settings,
+    text,
+    log: app.log,
+  });
+  app.decorate("pipeline", pipeline);
 
   await app.register(
     async (api) => {
       await api.register(healthRoutes, { dataDir: deps.dataDir, secretStore: deps.secretStore.kind });
       await api.register(projectRoutes, { prefix: "/projects", projects: repos.projects });
       await api.register(interviewRoutes, { prefix: "/projects", projects: repos.projects, interview });
+      await api.register(generationRoutes, { prefix: "/projects", pipeline });
       await api.register(settingsRoutes, { prefix: "/settings", settings: repos.settings });
       await api.register(secretRoutes, { prefix: "/secrets", secrets: repos.secrets });
       await api.register(connectionRoutes, { prefix: "/connections", connections: repos.connections, adapterDeps });

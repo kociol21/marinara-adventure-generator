@@ -14,6 +14,34 @@ export const projectSchema = z.object({
 });
 export type Project = z.infer<typeof projectSchema>;
 
+export type StageStatus = "pending" | "running" | "done" | "failed" | "stale";
+
+/** Spoiler-free view of one pipeline stage. */
+export interface StageView {
+  id: string;
+  label: string;
+  status: StageStatus;
+  summary: string | null;
+  error: string | null;
+  /** Hidden-content detail of a failure; present only when "Show spoilers" is on. */
+  errorDetail?: string | null;
+  attempts: number;
+  finishedAt: string | null;
+}
+
+export interface GenerationState {
+  running: boolean;
+  /** Stages known so far; card and lorebook stages appear once the plan exists. */
+  stages: StageView[];
+  /** Validation warnings of the assembled package, spoiler-free summaries only. */
+  warnings: string[];
+  /** Informational notes from validation (not problems). */
+  notes: string[];
+  ready: boolean;
+}
+
+export const startGenerationSchema = z.object({ confirmUsage: z.literal(true) });
+
 export const createProjectSchema = z.object({
   title: z.string().trim().min(1).max(200),
 });
