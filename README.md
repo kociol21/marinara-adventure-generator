@@ -2,7 +2,7 @@
 
 Local web app that prepares complete, spoiler-free adventures (character cards, persona, lorebooks, Secret Plot seed, opening) for [Marinara Engine](https://github.com/Pasta-Devs/Marinara-Engine). See the [specification](Marinara-Adventure-Generator-SPEC.md), [technical verification](docs/01-weryfikacja-techniczna.md) and [architecture plan](docs/02-architektura-i-plan.md).
 
-Status: milestone M0 (app skeleton).
+Status: milestones M0 (app skeleton) and M1 (model connections: ChatGPT via Codex login, NanoGPT, OpenRouter, OpenAI-compatible; separate text, image and embedding model lists; explicit, cost-labelled tests; task assignments).
 
 ## Requirements
 

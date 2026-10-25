@@ -3,6 +3,7 @@ import Fastify, { type FastifyInstance } from "fastify";
 import fastifyStatic from "@fastify/static";
 import { ZodError } from "zod";
 import type { Db } from "./db/database.ts";
+import { createConnectionsRepo } from "./repos/connections.ts";
 import { createProjectsRepo } from "./repos/projects.ts";
 import { createSecretsRepo } from "./repos/secrets.ts";
 import { createSettingsRepo } from "./repos/settings.ts";
@@ -12,6 +13,9 @@ import { healthRoutes } from "./routes/health.ts";
 import { projectRoutes } from "./routes/projects.ts";
 import { secretRoutes } from "./routes/secrets.ts";
 import { settingsRoutes } from "./routes/settings.ts";
+import { assignmentRoutes, connectionRoutes } from "./routes/connections.ts";
+import { createCodexAuth, type CodexAuthClient } from "./connections/codex-auth.ts";
+import type { FetchFn } from "./connections/http.ts";
 
 export interface AppDeps {
   db: Db;
@@ -22,6 +26,9 @@ export interface AppDeps {
   trustedPorts?: number[];
   webDistDir?: string;
   logger?: boolean;
+  /** Outbound HTTP for providers; replaced in tests. */
+  fetch?: FetchFn;
+  codexAuth?: CodexAuthClient;
 }
 
 export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
@@ -40,11 +47,15 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
     return reply.status(status).send({ error: status >= 500 ? "Internal server error" : (error as Error).message });
   });
 
+  const secrets = createSecretsRepo(deps.db, deps.secretStore);
   const repos = {
     projects: createProjectsRepo(deps.db),
     settings: createSettingsRepo(deps.db),
-    secrets: createSecretsRepo(deps.db, deps.secretStore),
+    secrets,
+    connections: createConnectionsRepo(deps.db, secrets),
   };
+  const fetchFn = deps.fetch ?? fetch;
+  const adapterDeps = { fetch: fetchFn, codexAuth: deps.codexAuth ?? createCodexAuth({ fetch: fetchFn }) };
 
   await app.register(
     async (api) => {
@@ -52,6 +63,8 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
       await api.register(projectRoutes, { prefix: "/projects", projects: repos.projects });
       await api.register(settingsRoutes, { prefix: "/settings", settings: repos.settings });
       await api.register(secretRoutes, { prefix: "/secrets", secrets: repos.secrets });
+      await api.register(connectionRoutes, { prefix: "/connections", connections: repos.connections, adapterDeps });
+      await api.register(assignmentRoutes, { prefix: "/assignments", connections: repos.connections });
     },
     { prefix: "/api" },
   );

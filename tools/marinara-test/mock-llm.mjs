@@ -30,6 +30,12 @@ createServer((req, res) => {
       body = JSON.parse(raw || "{}");
     } catch {}
     appendFileSync(logFile, JSON.stringify({ at: new Date().toISOString(), url: req.url, body }) + "\n");
+    if (req.url?.endsWith("/images/generations")) {
+      // 1x1 red PNG.
+      const png = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8DwHwAFBQIAX8jx0gAAAABJRU5ErkJggg==";
+      res.writeHead(200, { "Content-Type": "application/json" });
+      return res.end(JSON.stringify({ created: 0, data: [{ b64_json: png }] }));
+    }
     if (req.url?.endsWith("/embeddings")) {
       // Deterministic 16-dim bag-of-characters vectors: similar text -> similar vector.
       const inputs = Array.isArray(body.input) ? body.input : [body.input ?? ""];

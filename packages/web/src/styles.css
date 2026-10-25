@@ -208,3 +208,86 @@ button.danger {
 .danger-zone {
   margin-top: 32px;
 }
+
+.panel {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 12px 16px;
+  margin: 16px 0;
+}
+
+.panel h2 {
+  margin-top: 4px;
+  font-size: 1.1rem;
+}
+
+.subpanel {
+  border-top: 1px solid var(--border);
+  padding-top: 8px;
+  margin-top: 12px;
+}
+
+.subpanel h3 {
+  font-size: 0.95rem;
+  margin: 4px 0 8px;
+}
+
+.card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: start;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.row + .row,
+.subpanel .row {
+  margin-top: 8px;
+}
+
+.row select {
+  flex: 1;
+  min-width: 200px;
+}
+
+.row input.narrow {
+  flex: 0 1 140px;
+  min-width: 100px;
+}
+
+button.secondary {
+  background: transparent;
+  color: var(--text);
+  border-color: var(--border);
+}
+
+.ok {
+  color: #2e7d32;
+}
+
+@media (prefers-color-scheme: dark) {
+  .ok {
+    color: #7bc67e;
+  }
+}
+
+.small {
+  font-size: 0.85rem;
+}
+
+.row > span {
+  align-self: center;
+}
+
+.test-image {
+  display: block;
+  max-width: 256px;
+  margin-top: 8px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+}
+
+code {
+  font-size: 0.9em;
+}
