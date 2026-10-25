@@ -14,6 +14,12 @@ export const romanceSchema = z.enum(["none", "background", "possible", "central"
 export const sexualContentSchema = z.enum(["none", "fade-to-black", "explicit"]);
 export const horrorSchema = z.enum(["none", "light", "strong"]);
 export const povSchema = z.enum(["second", "third", "first"]);
+export const styleIntensitySchema = z.enum(["light", "strong"]);
+
+/** True when the player described a prose voice worth carrying into the material. */
+export function hasProseStyle(r: { narration: { style: string; inspirations: string[] } }): boolean {
+  return r.narration.style.trim().length > 0 || r.narration.inspirations.length > 0;
+}
 
 export const requirementsSchema = z.object({
   /** The player's original pitch, kept verbatim (any language). */
@@ -25,7 +31,12 @@ export const requirementsSchema = z.object({
     .object({
       pov: povSchema.default("second"),
       tense: z.enum(["present", "past"]).default("present"),
+      /** The prose voice: rhythm, imagery, diction, dialogue habits. */
       style: line(500),
+      /** Authors, works or traditions the prose should echo (style only, never their plots or characters). */
+      inspirations: z.array(z.string().trim().min(1).max(100)).max(6).default([]),
+      /** How strongly descriptive material (cards, lorebooks) carries the voice; play text always does. */
+      intensity: styleIntensitySchema.default("light"),
     })
     .prefault({}),
   setting: z

@@ -53,7 +53,10 @@ const FIELD_GUIDE = `Requirements JSON fields:
 - idea: leave as given (the app keeps the player's original pitch).
 - genre: main genre, e.g. "noir detective mystery". subgenres: extra genres blended in.
 - tone: list of mood words, e.g. ["gritty", "melancholic", "wry humor"].
-- narration: { pov: "second"|"third"|"first", tense: "present"|"past", style: short prose style note }.
+- narration: { pov: "second"|"third"|"first", tense: "present"|"past", style, inspirations, intensity }.
+  style: the prose voice in a sentence or two (rhythm, imagery, diction, how dialogue sounds), e.g. "terse hard-boiled sentences, wry similes, rain-soaked imagery, clipped dialogue".
+  inspirations: authors, works or traditions whose STYLE the writing should echo, e.g. ["Raymond Chandler", "Dashiell Hammett"]. Style only: never their plots or characters.
+  intensity: "light" (descriptive material keeps a hint of the voice) or "strong" (everything leans into it). Play text (greetings, dialogue examples, the opening) always uses the full voice.
 - setting: { era, place, technology, supernatural (how magic/fantasy works at a world level, no plot), notes }.
 - startingSituation: where the protagonist is and what is happening as play begins, as the player described it. Do not add hidden causes.
 - protagonist: { mode, notes }. mode is "new" (the generator writes a persona) unless the player says they will use their own existing Marinara persona; describing who they play ("I am a private investigator") still means "new", with that description in notes.
@@ -72,7 +75,7 @@ export function interviewSystemPrompt(current: Requirements, turnsSoFar: number)
 The player wants to DISCOVER the story while playing. Therefore:
 - Never invent, suggest, hint at or ask about secrets, culprits, twists, hidden motives, solutions, reveals or the ending.
 - Never write story content, characters' secrets or plot ideas in your message.
-- Ask only about preferences: genre, tone, narration, setting, starting situation, cast size, protagonist, length, content boundaries and visual style.
+- Ask only about preferences: genre, tone, narration and prose style, setting, starting situation, cast size, protagonist, length, content boundaries and visual style.
 
 How to interview:
 - Use everything the player already said; never ask for something already answered.
@@ -80,6 +83,7 @@ How to interview:
 - When something is left open and a sensible default exists, choose it, write it into the field and list it in "assumptions" (e.g. "Length: medium (a few sessions)") instead of asking.
 - The player may write in any language. Always reply in English and write every requirement value in English.
 - If the player volunteers a plot detail, record it in mustInclude without elaborating on it.
+- Prose style matters in AI roleplay: the narrator imitates the voice of the cards and the opening. If the player has not described a style or named inspirations, ask once, offering two or three concrete options that fit the genre (e.g. "Chandler-style hard-boiled, or plainer modern prose?"). If they leave it open, propose a fitting style and list it in assumptions.
 - Set readyForSummary to true once genre, tone, era, place and the starting situation are clear and nothing important is undecided.${
     finalTurn ? "\n- This is the last interview turn: ask no questions, fill every gap with defaults, list them in assumptions, and set readyForSummary to true." : ""
   }

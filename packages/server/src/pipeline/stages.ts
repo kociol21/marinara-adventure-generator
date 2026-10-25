@@ -1,5 +1,5 @@
 import type { AdventurePackage, CardDraft, LorebookDraft, Requirements } from "@adv/shared";
-import { adventurePackageSchema } from "@adv/shared";
+import { adventurePackageSchema, lorebookEntryDraftSchema } from "@adv/shared";
 import type { TextGenerator } from "../generation/text.ts";
 import { validatePackage, type PackageIssue } from "../marinara/validate.ts";
 import {
@@ -19,7 +19,7 @@ import {
   type Opening,
   type Plan,
 } from "./schemas.ts";
-import { cardPrompt, cluesPrompt, factsPrompt, lorebookPrompt, openingPrompt, personaPrompt, planPrompt } from "./prompts.ts";
+import { cardPrompt, cluesPrompt, factsPrompt, lorebookPrompt, narrativeVoiceEntry, openingPrompt, personaPrompt, planPrompt } from "./prompts.ts";
 import type { z } from "zod";
 import { scaleTargets, wordCount } from "./scale.ts";
 
@@ -312,7 +312,21 @@ export function assemble(ctx: StageContext): AssembleOutput {
       };
     });
 
-  const lorebooks = LOREBOOK_KEYS.map((key) => ({ key, out: ctx.output<LorebookOutput>(`lorebook:${key}`) }))
+  const voice = narrativeVoiceEntry(ctx.requirements);
+  const lorebooks = LOREBOOK_KEYS.map((key) => {
+    const out = ctx.output<LorebookOutput>(`lorebook:${key}`);
+    // The voice reminder rides in World as one short constant entry, ahead of everything else.
+    if (key !== "world" || !voice) return { key, out };
+    return {
+      key,
+      out: {
+        entries: [
+          lorebookEntryDraftSchema.parse({ key: "narrative-voice", name: "Narrative voice", type: "constant", order: 1, content: voice, noVector: true }),
+          ...out.entries.filter((e) => e.key !== "narrative-voice"),
+        ],
+      },
+    };
+  })
     .filter(({ out }) => out.entries.length > 0)
     .map(({ key, out }) => ({
       key,

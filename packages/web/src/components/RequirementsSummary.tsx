@@ -34,7 +34,17 @@ export function RequirementsSummary({
   const rows: Array<[string, string]> = [
     ["Genre", [r.genre, ...r.subgenres].filter(Boolean).join(" · ")],
     ["Tone", r.tone.join(", ")],
-    ["Narration", `${POV[r.narration.pov]}, ${r.narration.tense} tense${r.narration.style ? ` — ${r.narration.style}` : ""}`],
+    ["Narration", `${POV[r.narration.pov]}, ${r.narration.tense} tense`],
+    [
+      "Prose style",
+      [
+        r.narration.style,
+        r.narration.inspirations.length ? `in the manner of ${r.narration.inspirations.join(", ")}` : "",
+      ]
+        .filter(Boolean)
+        .join(" — ")
+        .concat(r.narration.style || r.narration.inspirations.length ? ` (${r.narration.intensity} in cards and lorebooks, full in play text)` : ""),
+    ],
     ["Era", r.setting.era],
     ["Place", r.setting.place],
     ["Technology", r.setting.technology],

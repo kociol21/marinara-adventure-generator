@@ -1,4 +1,4 @@
-import type { Requirements } from "@adv/shared";
+import { hasProseStyle, type Requirements } from "@adv/shared";
 import type { Clues, Entity, Fact, Facts, LorebookKey, Plan } from "./schemas.ts";
 import { scaleTargets } from "./scale.ts";
 
@@ -7,7 +7,7 @@ import { scaleTargets } from "./scale.ts";
  * stages apart. All content is English (spec §22). Bump PROMPT_VERSION when a prompt changes
  * meaningfully: it is part of each stage's input hash, so affected stages re-run.
  */
-export const PROMPT_VERSION = "2";
+export const PROMPT_VERSION = "3";
 
 const JSON_ONLY = "Reply with ONLY one JSON object matching the shape below. No prose, no code fences.";
 
@@ -16,7 +16,8 @@ export function brief(r: Requirements): string {
   return `ADVENTURE REQUIREMENTS (approved by the player)
 Genre: ${[r.genre, ...r.subgenres].filter(Boolean).join(", ")}
 Tone: ${r.tone.join(", ")}
-Narration: ${r.narration.pov} person, ${r.narration.tense} tense. ${r.narration.style}
+Narration: ${r.narration.pov} person, ${r.narration.tense} tense.
+Prose voice: ${r.narration.style || "fitting the genre"}${r.narration.inspirations.length ? ` (in the manner of ${r.narration.inspirations.join(", ")})` : ""}; intensity ${r.narration.intensity}.
 Setting: ${r.setting.era}; ${r.setting.place}. Technology: ${r.setting.technology || "fitting the era"}. Supernatural: ${r.setting.supernatural || "none"}. ${r.setting.notes}
 Starting situation: ${r.startingSituation}
 Protagonist (the player): ${r.protagonist.notes || "unspecified"}; ${r.protagonist.mode === "new" ? "a new persona will be written" : "the player brings an existing persona, so never fix their name, look or history"}.
@@ -25,6 +26,21 @@ Length: ${r.scale.length}. ${r.scale.notes}
 Content limits: violence ${c.violence}, romance ${c.romance}, sexual content ${c.sexualContent}, horror ${c.horror}.${c.hardLimits.length ? ` Never include: ${c.hardLimits.join("; ")}.` : ""} ${c.notes}
 ${r.mustInclude.length ? `The player asked for: ${r.mustInclude.join("; ")}.` : ""}
 Original pitch: ${r.idea}`;
+}
+
+/**
+ * The narrator in Marinara imitates the voice of what it reads, most of all greetings, example
+ * dialogue and the opening. So the voice is applied in layers: full in play text, lighter in
+ * descriptive material it must still read as information, and not at all in internal planning.
+ */
+export function voiceRule(r: Requirements, level: "internal" | "descriptive" | "play"): string {
+  if (level === "internal") return "Write plainly and precisely; the prose voice is applied in later stages.";
+  if (!hasProseStyle(r)) return level === "play" ? "Write vivid prose fitting the genre and tone." : "Write clear prose with a touch of the genre's flavour.";
+  const voice = `${r.narration.style}${r.narration.inspirations.length ? ` Echo the style of ${r.narration.inspirations.join(", ")}: rhythm, diction, imagery and attitude. Never quote them or reuse their lines, characters or plots.` : ""}`;
+  if (level === "play") return `Write fully in the adventure's prose voice: ${voice} The narrator will imitate this text, so it sets the voice of the whole game.`;
+  return r.narration.intensity === "strong"
+    ? `Write in the adventure's prose voice: ${voice} Keep every sentence informative: the narrator reads this as reference.`
+    : `Give the text a light touch of the adventure's prose voice (${voice}) while keeping it clear and informative: the narrator reads this as reference, so information comes first.`;
 }
 
 const COMMON = `You are part of a pipeline that writes a complete adventure for the Marinara Engine roleplay app. The player will discover the story while playing, so this material is hidden from them; it must still be consistent, fair and playable.
@@ -44,6 +60,7 @@ Size for a ${r.scale.length} adventure: at least ${t.entities} entities, includi
 - One card character opens the adventure with the starting situation; give its key as openingCardKey.
 - publicDescription must contain only what anyone could know; hidden things go into role, truth and threads.
 - Names must not hint at secrets.
+- ${voiceRule(r, "internal")}
 
 ${brief(r)}
 
@@ -75,7 +92,7 @@ Coverage (this registry is the narrator's only source; what is missing here does
 - the world: how the supernatural works day to day, institutions, customs, prejudices, prices and dangers that colour scenes;
 - the truth: the full timeline, the method, the motive, and what physical and testimonial traces each event left.
 Perspectives: give every card character at least ${scaleTargets(r).perspectivesPerCard} beliefs or claims of their own (alibis, half-truths, lies, wrong guesses about others), linked with contradicts when they are false. Minor characters should have them too where they matter. Mysteries live on what people say versus what is true.
-Rules: no duplicates (the same fact in other words is a duplicate); prefer lorebooks for secrets a card character holds, so they can be private to that character; write ${scaleTargets(r).facts[0]}-${scaleTargets(r).facts[1]} facts, each a concrete, specific sentence. Ids are f1, f2, … in order.
+Rules: no duplicates (the same fact in other words is a duplicate); prefer lorebooks for secrets a card character holds, so they can be private to that character; write ${scaleTargets(r).facts[0]}-${scaleTargets(r).facts[1]} facts, each a concrete, specific sentence. Ids are f1, f2, … in order. ${voiceRule(r, "internal")}
 
 ${brief(r)}
 
@@ -95,6 +112,7 @@ Make the mystery solvable along several paths.
 - Give EVERY conclusion at least three clues in different places or people, so missing one never blocks progress.
 - Each clue says where it is (an entity key) and how it can be found; link factId when a registry fact carries it.
 - Red herrings need an innocent explanation that fits the truth.
+- ${voiceRule(r, "internal")}
 
 ${brief(r)}
 
@@ -126,6 +144,8 @@ Field rules (do not copy the same biography between fields):
 - exampleDialogue: 2-3 short exchanges separated by <START>, using {{user}} and {{char}}, showing voice and reactions. They are samples, not events that happened.
 - tags: 2-5 neutral library tags (genre, setting); never hint at secrets.
 - imageAppearance: optional short comma-separated portrait tags.
+Voice of description, personality, backstory, appearance and scenario: ${voiceRule(r, "descriptive")}
+Voice of firstMessage and exampleDialogue: ${voiceRule(r, "play")} In dialogue, ${entity.name} still speaks with their own idiom; the narration around it carries the prose voice.
 Use the facts homed in this card. Facts homed elsewhere are context only: do not restate them; the character may allude to what they would naturally reveal.
 Card fields are read by the narrator every turn, so keep secrets the character holds out of them unless the character constantly acts on them; those live in private lorebook entries.
 
@@ -150,6 +170,7 @@ ${COMMON}
 
 Write the player's persona card (the protagonist). It is visible to the player, so it must contain no secrets of the adventure.
 Give them a past and connections that make the starting situation natural, but leave their choices open. Fields: description, personality, backstory, appearance, scenario (their starting context), exampleDialogue (optional, may be empty), tags.
+${voiceRule(r, "descriptive")}
 
 ${brief(r)}
 
@@ -185,7 +206,8 @@ Activation (decide for each entry: when should the narrator see this?):
 - recursion: true only when the entry should pull in related entries it names; never on hub entries.
 - description: one plain sentence summarizing the entry (used by a router agent; may be spoiler-bearing, it is hidden).
 - Keys and names are visible in Marinara's editor; entry names may be plain ("Harbor office", "Alibi of …").
-Content: write for the narrator who must play scenes from it. Each non-constant entry is ${scaleTargets(r).entryWords}-200 words of concrete detail: what is seen and heard, how people act, what can be learned and under which conditions, how it connects to other subjects. Plain prose, no headings. A one-line entry is too thin to play. Prefer one rich entry per subject over many fragments; split only when parts need different keys or privacy.${
+Content: write for the narrator who must play scenes from it. Each non-constant entry is ${scaleTargets(r).entryWords}-200 words of concrete detail: what is seen and heard, how people act, what can be learned and under which conditions, how it connects to other subjects. Plain prose, no headings. A one-line entry is too thin to play. Prefer one rich entry per subject over many fragments; split only when parts need different keys or privacy.
+Voice: ${voiceRule(r, "descriptive")}${
     lorebook === "plot" && clues
       ? `\nAlso render the clue map: for each clue an entry (or a group in one entry) keyed on the place or person where it is found, saying what can be found and how. Keep red herrings with their innocent explanation.`
       : ""
@@ -213,6 +235,9 @@ Write three things:
 2. openingMessage: ${openingCard.name}'s First Message that plays the starting situation ("${r.startingSituation}"). In ${r.narration.pov} person, ${r.narration.tense} tense. Show ${openingCard.name}'s voice, hand the scene to the player, and never decide {{user}}'s actions, words or feelings. No secrets stated outright.
 3. secretPlot: the Narrative Director's hidden long-term arc, consistent with the truth:
    description (2-4 sentences: the arc, its mystery, resolution conditions, the protagonist's journey), protagonistArc (1-2 sentences), characterArc (1-2 sentences about ${openingCard.name}), sceneDirections (3-6 short beats the story could pass through, not fixed scenes), pacing (one phrase).
+Voice of openingMessage: ${voiceRule(r, "play")}
+Voice of teaser: ${voiceRule(r, "descriptive")}
+secretPlot: ${voiceRule(r, "internal")}
 
 ${brief(r)}
 
@@ -227,4 +252,18 @@ ${factLines(facts.facts.filter((f) => f.layer === "truth"))}
 
 ${JSON_ONLY}
 {"teaser": "...", "openingMessage": "...", "secretPlot": {"description": "...", "protagonistArc": "...", "characterArc": "...", "sceneDirections": ["..."], "pacing": "..."}}`;
+}
+
+/** Built by code, not the model: a short constant reminder of the voice for every reply. */
+export function narrativeVoiceEntry(r: Requirements): string | null {
+  if (!hasProseStyle(r)) return null;
+  const parts = [
+    `Narrate in ${r.narration.pov} person, ${r.narration.tense} tense.`,
+    r.narration.style ? `Prose voice: ${r.narration.style}.` : "",
+    r.narration.inspirations.length
+      ? `Echo the style of ${r.narration.inspirations.join(", ")}: rhythm, diction, imagery and attitude. Do not quote them or borrow their characters or plots.`
+      : "",
+    r.tone.length ? `Tone: ${r.tone.join(", ")}.` : "",
+  ];
+  return parts.filter(Boolean).join(" ").replace(/\.\./g, ".");
 }

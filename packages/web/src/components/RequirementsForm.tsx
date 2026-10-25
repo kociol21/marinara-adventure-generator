@@ -5,6 +5,7 @@ import {
   povSchema,
   romanceSchema,
   sexualContentSchema,
+  styleIntensitySchema,
   violenceSchema,
   type Requirements,
 } from "@adv/shared";
@@ -58,6 +59,7 @@ export function RequirementsForm({
   // Comma/line lists are edited as text and parsed on save, so typing a comma is not swallowed.
   const [subgenres, setSubgenres] = useState(initial.subgenres.join(", "));
   const [tone, setTone] = useState(initial.tone.join(", "));
+  const [inspirations, setInspirations] = useState(initial.narration.inspirations.join(", "));
   const [hardLimits, setHardLimits] = useState(initial.content.hardLimits.join("\n"));
   const [mustInclude, setMustInclude] = useState(initial.mustInclude.join("\n"));
   const [assumed, setAssumed] = useState(assumptions.join("\n"));
@@ -74,6 +76,7 @@ export function RequirementsForm({
         ...r,
         subgenres: list(subgenres),
         tone: list(tone),
+        narration: { ...r.narration, inspirations: list(inspirations) },
         content: { ...r.content, hardLimits: lines(hardLimits) },
         mustInclude: lines(mustInclude),
       },
@@ -99,9 +102,25 @@ export function RequirementsForm({
           <Choice value={r.narration.tense} options={["present", "past"] as const} onChange={(tense) => setIn("narration", { tense })} />
         </Field>
       </div>
-      <Field label="Narration style">
-        <input value={r.narration.style} onChange={(e) => setIn("narration", { style: e.target.value })} />
+      <Field label="Prose voice (rhythm, imagery, diction, dialogue)">
+        <input
+          placeholder="e.g. terse hard-boiled sentences, wry similes, rain-soaked imagery"
+          value={r.narration.style}
+          onChange={(e) => setIn("narration", { style: e.target.value })}
+        />
       </Field>
+      <div className="row">
+        <Field label="Style inspirations (comma-separated)">
+          <input placeholder="e.g. Raymond Chandler, Dashiell Hammett" value={inspirations} onChange={(e) => setInspirations(e.target.value)} />
+        </Field>
+        <Field label="Style in cards and lorebooks">
+          <Choice
+            value={r.narration.intensity}
+            options={styleIntensitySchema.options}
+            onChange={(intensity) => setIn("narration", { intensity })}
+          />
+        </Field>
+      </div>
       <Field label="Era">
         <input value={r.setting.era} onChange={(e) => setIn("setting", { era: e.target.value })} />
       </Field>

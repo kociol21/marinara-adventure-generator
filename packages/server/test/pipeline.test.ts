@@ -197,6 +197,25 @@ describe("generation pipeline", () => {
     expect(state.stages.find((s) => s.id === "lorebook:plot")!.calls).toBe(1);
   });
 
+  it("adds a constant Narrative voice entry when a prose style is set", async () => {
+    const { id } = await setup();
+    await runToEnd(id);
+    const plain = pipeline().assembled(id)!.package.lorebooks.find((l) => l.key === "world")!;
+    expect(plain.entries.some((e) => e.key === "narrative-voice")).toBe(false);
+
+    await approve(id, {
+      ...requirements,
+      narration: { ...requirements.narration, style: "terse hard-boiled sentences, wry similes", inspirations: ["Raymond Chandler"] },
+    });
+    await runToEnd(id);
+    const world = pipeline().assembled(id)!.package.lorebooks.find((l) => l.key === "world")!;
+    const voice = world.entries[0]!;
+    expect(voice).toMatchObject({ key: "narrative-voice", type: "constant", order: 1, noVector: true });
+    expect(voice.content).toContain("Raymond Chandler");
+    expect(voice.content).toContain("Do not quote them");
+    expect(world.entries.filter((e) => e.key === "narrative-voice")).toHaveLength(1);
+  });
+
   it("reports an interrupted stage after a restart", async () => {
     const { id } = await setup();
     const stages = createStagesRepo(db);
