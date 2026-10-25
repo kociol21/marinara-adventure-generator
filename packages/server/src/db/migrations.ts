@@ -108,4 +108,18 @@ export const migrations: string[] = [
     PRIMARY KEY (project_id, stage)
   );
   `,
+  `
+  -- Fix notes from the quality audit, fed into the next run of their stage. basis = hash of the
+  -- approved requirements they were written against; notes for older requirements are ignored.
+  CREATE TABLE stage_note (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    project_id  TEXT NOT NULL REFERENCES project(id) ON DELETE CASCADE,
+    basis       TEXT NOT NULL,
+    stage       TEXT NOT NULL,
+    round       INTEGER NOT NULL,
+    note        TEXT NOT NULL,
+    created_at  TEXT NOT NULL
+  );
+  CREATE INDEX stage_note_project ON stage_note(project_id, basis);
+  `,
 ];

@@ -47,10 +47,14 @@ const fixture = JSON.parse(readFileSync(new URL("./pipeline-fixture.json", impor
 
 /** Pipeline stages answer from the neutral probe fixture. */
 export function stageReply(system) {
-  const stage = system.match(/^Stage: (\w+)/m)?.[1];
+  const stage = system.match(/^Stage: ([\w-]+)/m)?.[1];
   if (!stage) return null;
   if (stage === "card") return JSON.stringify(fixture.cards[system.match(/^Card key: (\S+)/m)[1]]);
   if (stage === "lorebook") return JSON.stringify(fixture.lorebooks[system.match(/^Lorebook: (\w+)/m)[1]]);
+  // MOCK_AUDIT_FINDING=1 makes the quality review always report one major finding on card beta.
+  if (stage === "audit-review" && process.env.MOCK_AUDIT_FINDING) {
+    return JSON.stringify({ findings: [{ area: "voices", severity: "major", target: "card:beta", detail: "MOCK_HIDDEN_DETAIL", fix: "MOCK_FIX" }] });
+  }
   return JSON.stringify(fixture[stage]);
 }
 

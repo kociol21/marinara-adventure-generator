@@ -2,6 +2,7 @@ import { useEffect, useRef } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { GenerationState, StageView } from "@adv/shared";
 import { api } from "../api.ts";
+import { AuditReport } from "./AuditReport.tsx";
 
 const ICON: Record<StageView["status"], string> = {
   pending: "○",
@@ -54,7 +55,12 @@ export function Generation({ projectId }: { projectId: string }) {
   const failed = s.stages.find((st) => st.status === "failed");
 
   const confirmRun = (what: string, run: () => void) => {
-    if (window.confirm(`${what} Each stage is one or more requests to your Text generation model and uses quota or credits.`)) run();
+    if (
+      window.confirm(
+        `${what} Each stage is one or more requests to your Text generation model and uses quota or credits. The quality audit adds two requests per round and may regenerate parts with major findings, up to the automatic fix limit in Settings.`,
+      )
+    )
+      run();
   };
 
   return (
@@ -110,6 +116,8 @@ export function Generation({ projectId }: { projectId: string }) {
         )}
       </div>
       {(start.isError || retry.isError) && <p className="error">{(start.error ?? retry.error)?.message}</p>}
+
+      {s.audit && !s.running && <AuditReport audit={s.audit} />}
 
       {s.ready && s.warnings.length > 0 && (
         <div className="assumptions">

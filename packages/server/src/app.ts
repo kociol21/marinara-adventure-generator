@@ -19,6 +19,7 @@ import type { FetchFn } from "./connections/http.ts";
 import { createInterviewRepo } from "./repos/interview.ts";
 import { createInterviewService } from "./interview/interview.ts";
 import { createTextGenerator } from "./generation/text.ts";
+import { createEmbedder } from "./generation/embeddings.ts";
 import { interviewRoutes } from "./routes/interview.ts";
 import { generationRoutes } from "./routes/generation.ts";
 import { createPipeline } from "./pipeline/runner.ts";
@@ -72,6 +73,7 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
     projects: repos.projects,
     settings: repos.settings,
     text,
+    embedder: createEmbedder(deps.db, repos.connections, adapterDeps),
     log: app.log,
   });
   app.decorate("pipeline", pipeline);

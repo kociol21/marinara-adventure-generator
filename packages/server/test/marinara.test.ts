@@ -117,6 +117,7 @@ describe("export bundle", () => {
       "probe-harbor/lorebooks/probe-world.marinara.json",
       "probe-harbor/manifest.json",
       "probe-harbor/persona/probe-persona.marinara.json",
+      "probe-harbor/qa-report.md",
     ]);
     const all = [...files.values()].map((b) => b.toString("utf8")).join("\n");
     expect(all).not.toContain("SECRET_ARC");

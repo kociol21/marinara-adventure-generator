@@ -10,6 +10,10 @@ export interface PackageIssue {
   summary: string;
   /** May quote hidden content; shown only behind "Show spoilers". */
   detail?: string;
+  /** Lorebook stage that can fix an entry-level issue (pipeline stage id). */
+  target?: string;
+  /** Spoiler-free place, e.g. `"Plot" entry #3`. */
+  where?: string;
 }
 
 /** Words so common in prose that, as primary keys, they fire in almost every scene. */
@@ -36,8 +40,9 @@ function hasActivationPath(entry: LorebookEntryDraft, lb: LorebookDraft): boolea
 /** Structural checks done by code (spec §12): formats, references, limits, activation and budgets. */
 export function validatePackage(pkg: AdventurePackage): PackageIssue[] {
   const issues: PackageIssue[] = [];
+  let place: { target: string; where: string } | null = null;
   const add = (severity: IssueSeverity, code: string, summary: string, detail?: string) =>
-    issues.push({ severity, code, summary, ...(detail ? { detail } : {}) });
+    issues.push({ severity, code, summary, ...(detail ? { detail } : {}), ...(place ?? {}) });
 
   // ── Cast ──
   if (pkg.characters.length > pkg.maxNpcCards) {
@@ -91,6 +96,7 @@ export function validatePackage(pkg: AdventurePackage): PackageIssue[] {
     let constantCount = 0;
     lb.entries.forEach((entry, i) => {
       const ref = entryRef(lb, i);
+      place = { target: `lorebook:${lb.key}`, where: ref };
       if (entryKeys.has(entry.key)) add("error", "duplicate-entry-key", `${ref} reuses an internal key.`);
       entryKeys.add(entry.key);
 
@@ -136,6 +142,7 @@ export function validatePackage(pkg: AdventurePackage): PackageIssue[] {
         if (!cardKeys.has(cardKey)) add("error", "unknown-private-card", `${ref} is private to a card that does not exist.`, cardKey);
       }
       if (entry.position === "outlet" && !entry.outletName.trim()) add("error", "outlet-name", `${ref} uses Outlet position without an outlet name.`);
+      place = null;
     });
 
     if (lb.tokenBudget > 0 && constantTokens > lb.tokenBudget) {

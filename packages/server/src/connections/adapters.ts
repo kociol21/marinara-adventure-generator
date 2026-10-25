@@ -52,6 +52,8 @@ export interface ProviderAdapter {
   complete(request: CompletionRequest): Promise<string>;
   testText(modelId: string): Promise<string>;
   testImage(modelId: string): Promise<string>;
+  /** Embedding vectors, one per text, in order. */
+  embed(modelId: string, texts: string[]): Promise<number[][]>;
 }
 
 export interface AdapterDeps {
@@ -128,6 +130,23 @@ class OpenAICompatibleAdapter implements ProviderAdapter {
 
   testText(modelId: string): Promise<string> {
     return this.complete({ modelId, system: "", messages: [{ role: "user", content: TEXT_TEST_PROMPT }], maxOutputTokens: 200, timeoutMs: 60_000 });
+  }
+
+  async embed(modelId: string, texts: string[]): Promise<number[][]> {
+    const json = await requestJson(
+      this.fetch,
+      joinUrl(this.baseUrl, "embeddings"),
+      { method: "POST", headers: this.headers(true), body: JSON.stringify({ model: modelId, input: texts }) },
+      { label: `${this.label} embeddings (${modelId})`, timeoutMs: 120_000 },
+    );
+    const rows = dataArray(json)
+      .slice()
+      .sort((a, b) => Number(a.index ?? 0) - Number(b.index ?? 0))
+      .map((r) => r.embedding);
+    if (rows.length !== texts.length || !rows.every((v) => Array.isArray(v) && v.every((x) => typeof x === "number"))) {
+      throw new ProviderError(`${this.label} returned ${rows.length} embeddings for ${texts.length} texts.`);
+    }
+    return rows as number[][];
   }
 
   protected imagesUrl(): string {
@@ -309,6 +328,10 @@ class CodexAdapter implements ProviderAdapter {
 
   testText(modelId: string): Promise<string> {
     return this.complete({ modelId, system: "", messages: [{ role: "user", content: TEXT_TEST_PROMPT }], timeoutMs: 120_000 });
+  }
+
+  embed(): Promise<number[][]> {
+    return Promise.reject(new ProviderError("ChatGPT (Codex login) has no embedding models."));
   }
 
   async testImage(modelId: string): Promise<string> {

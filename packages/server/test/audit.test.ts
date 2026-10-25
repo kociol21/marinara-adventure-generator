@@ -1,0 +1,211 @@
+import { afterEach, describe, expect, it } from "vitest";
+import type { FastifyInstance } from "fastify";
+import { adventurePackageSchema, requirementsSchema, type GenerationState } from "@adv/shared";
+import { buildApp } from "../src/app.ts";
+import { openDatabase, type Db } from "../src/db/database.ts";
+import { MemorySecretStore } from "../src/secrets/secret-store.ts";
+import type { Pipeline } from "../src/pipeline/runner.ts";
+import { findDuplicates, findSpoilers, findUnreachableClues } from "../src/audit/code-checks.ts";
+import { toFindings } from "../src/audit/review.ts";
+import { textUnits } from "../src/audit/units.ts";
+import { factSchema, planSchema } from "../src/pipeline/schemas.ts";
+import { fakeFetch, type RecordedRequest } from "./fake-fetch.ts";
+import { readZip } from "./zip-reader.ts";
+import { probeInput } from "./fixtures/probe-package.ts";
+import fixture from "../../../tools/marinara-test/pipeline-fixture.json" with { type: "json" };
+
+const LONG = "the lighthouse keeper rows across the black water every night at nine to light the lamp himself";
+
+function pkgWith(mut: (p: typeof probeInput) => void) {
+  const input = structuredClone(probeInput);
+  mut(input);
+  return adventurePackageSchema.parse(input);
+}
+
+describe("code checks", () => {
+  it("find a passage copied between a card and a lorebook entry, and target the lorebook", () => {
+    const pkg = pkgWith((p) => {
+      p.characters[0]!.backstory = `Alpha grew up by the sea. ${LONG}.`;
+      p.lorebooks[0]!.entries[1]!.content = `Old story: ${LONG}, they say.`;
+    });
+    const dups = findDuplicates(textUnits(pkg));
+    expect(dups).toHaveLength(1);
+    expect(dups[0]).toMatchObject({ area: "duplicates", target: "lorebook:world", source: "code" });
+    expect(dups[0]!.summary).not.toContain("lighthouse keeper");
+    expect(dups[0]!.fix).toContain("Card: Probe Alpha (backstory)");
+  });
+
+  it("do not flag distinct texts", () => {
+    expect(findDuplicates(textUnits(adventurePackageSchema.parse(probeInput)))).toEqual([]);
+  });
+
+  it("flag secrets echoed in visible text and give-away words in tags", () => {
+    const secret = factSchema.parse({
+      id: "f1",
+      subject: "alpha",
+      statement: "Alpha poisoned the harbormaster with nightshade tea last winter",
+      layer: "truth",
+      secrecy: "secret",
+      home: { kind: "lorebook", lorebook: "plot" },
+    });
+    const pkg = pkgWith((p) => {
+      p.teaser = "Someone poisoned the harbormaster with nightshade tea.";
+      p.characters[1]!.tags = ["probe", "the killer"];
+    });
+    const found = findSpoilers(textUnits(pkg), [secret]);
+    const where = found.map((f) => `${f.where}:${f.severity}`);
+    expect(where).toContain("Teaser:major");
+    expect(where).toContain("Card: Probe Beta:major");
+    expect(found.every((f) => !f.summary.includes("nightshade"))).toBe(true);
+  });
+
+  it("find clues that do not surface when their place comes up", () => {
+    const pkg = pkgWith((p) => {
+      p.lorebooks[1]!.entries[1]!.factIds = ["f9"]; // "Chain start", keyed on "ledger" only
+    });
+    const plan = planSchema.parse({ ...fixture.plan, entities: [...fixture.plan.entities, { key: "pier", type: "location", name: "Old Pier", publicDescription: "A pier." }] });
+    const clues = {
+      conclusions: [{ id: "c1", statement: "x", factIds: [] }],
+      clues: [{ id: "k1", conclusionId: "c1", where: "pier", how: "found under the planks", factId: "f9" }],
+      redHerrings: [],
+    };
+    const found = findUnreachableClues(pkg, plan, clues);
+    expect(found).toHaveLength(1);
+    expect(found[0]).toMatchObject({ area: "activation", severity: "major", target: "lorebook:plot" });
+    expect(found[0]!.fix).toContain('add "Old Pier"');
+  });
+
+  it("write model finding summaries in code and drop unknown targets", () => {
+    const targets = new Map([["card:alpha", "Card: Probe Alpha"]]);
+    const [known, unknown] = toFindings(
+      null,
+      [
+        { area: "consistency", severity: "major", target: "card:alpha", detail: "Alpha killed Beta but says otherwise", fix: "x" },
+        { area: "mystery", severity: "minor", target: "card:nobody", detail: "y", fix: "z" },
+      ],
+      targets,
+    );
+    expect(known).toMatchObject({ target: "card:alpha", where: "Card: Probe Alpha", summary: "Card: Probe Alpha: possible contradiction with established facts." });
+    expect(unknown).toMatchObject({ target: null, where: "Package", fix: null });
+  });
+});
+
+// ── Audit inside the pipeline ──
+
+const PORT = 7880;
+const host = `127.0.0.1:${PORT}`;
+const write = { host, "x-adv-csrf": "1", "content-type": "application/json" };
+let app: FastifyInstance;
+let db: Db;
+
+const requirements = requirementsSchema.parse({
+  idea: "Neutral probe pitch.",
+  genre: "noir detective mystery",
+  tone: ["neutral"],
+  setting: { era: "probe era", place: "probe city" },
+  startingSituation: "A probe begins.",
+  maxNpcCards: 3,
+});
+
+const stageOf = (req: RecordedRequest) => {
+  const system = (req.body as { messages: Array<{ content: string }> }).messages[0]!.content;
+  const stage = system.match(/^Stage: ([\w-]+)/m)?.[1] ?? "?";
+  const sub = system.match(/^Card key: (\S+)/m)?.[1] ?? system.match(/^Lorebook: (\w+)/m)?.[1] ?? null;
+  return { stage, sub, system };
+};
+
+async function setup(options: { review?: () => unknown; embeddings?: boolean } = {}) {
+  const fake = fakeFetch({
+    "GET /models": () => ({ json: { data: [{ id: "m1" }, { id: "e1" }] } }),
+    "POST /embeddings": (req) => {
+      const input = (req.body as { input: string[] }).input;
+      return { json: { data: input.map((_, i) => ({ index: i, embedding: [1, i % 3, (i * 7) % 5] })) } };
+    },
+    "POST /chat/completions": (req) => {
+      const { stage, sub } = stageOf(req);
+      const f = fixture as Record<string, any>;
+      const body =
+        stage === "audit-review" && options.review
+          ? options.review()
+          : stage === "card"
+            ? f.cards[sub!]
+            : stage === "lorebook"
+              ? f.lorebooks[sub!]
+              : f[stage];
+      return { json: { choices: [{ message: { content: JSON.stringify(body) } }] } };
+    },
+  });
+  db = openDatabase(":memory:");
+  app = await buildApp({ db, secretStore: new MemorySecretStore(), dataDir: "x", port: PORT, fetch: fake.fetch });
+  const conn = (await app.inject({ method: "POST", url: "/api/connections", headers: write, payload: { kind: "nano-gpt", name: "N", apiKey: "k" } })).json();
+  await app.inject({ method: "POST", url: `/api/connections/${conn.id}/models/fetch`, headers: write, payload: { capability: "text" } });
+  await app.inject({ method: "PUT", url: "/api/assignments/text", headers: write, payload: { connectionId: conn.id, modelId: "m1" } });
+  if (options.embeddings) {
+    await app.inject({ method: "POST", url: `/api/connections/${conn.id}/models`, headers: write, payload: { capability: "embedding", modelId: "e1" } });
+    await app.inject({ method: "PUT", url: "/api/assignments/embedding", headers: write, payload: { connectionId: conn.id, modelId: "e1" } });
+  }
+  const id = (await app.inject({ method: "POST", url: "/api/projects", headers: write, payload: { title: "Probe Case" } })).json().id as string;
+  await app.inject({ method: "PUT", url: `/api/projects/${id}/requirements`, headers: write, payload: { requirements } });
+  await app.inject({ method: "POST", url: `/api/projects/${id}/requirements/approve`, headers: write, payload: {} });
+  return { id, requests: fake.requests };
+}
+
+async function run(id: string): Promise<GenerationState> {
+  await app.inject({ method: "POST", url: `/api/projects/${id}/generation/start`, headers: write, payload: { confirmUsage: true } });
+  await (app as unknown as { pipeline: Pipeline }).pipeline.idle(id);
+  return (await app.inject({ method: "GET", url: `/api/projects/${id}/generation`, headers: { host } })).json();
+}
+
+afterEach(async () => {
+  await app?.close();
+  db?.close();
+});
+
+describe("audit stage", () => {
+  it("reports a clean package with its scope and limits", async () => {
+    const { id } = await setup();
+    const state = await run(id);
+    expect(state.ready).toBe(true);
+    expect(state.audit).toMatchObject({ findings: [], fixRounds: 0, maxFixRounds: 2 });
+    expect(state.audit!.notChecked.join(" ")).toMatch(/no embedding model assigned/);
+    const zip = readZip((await app.inject({ method: "GET", url: `/api/projects/${id}/export`, headers: { host } })).rawPayload);
+    expect(zip.get("probe-case/qa-report.md")!.toString()).toMatch(/no open findings/);
+  });
+
+  it("sends a major finding back to its stage, with a round limit, and hides details", async () => {
+    const finding = { area: "consistency", severity: "major", target: "card:beta", detail: "HIDDEN_DETAIL", fix: "FIX_BETA_TIMELINE" };
+    const { id, requests } = await setup({ review: () => ({ findings: [finding] }) });
+    const state = await run(id);
+    expect(state.ready).toBe(true);
+    // The model keeps reporting it, so the loop stops at the limit (2 rounds) and leaves it open.
+    expect(state.audit!.fixRounds).toBe(2);
+    expect(state.audit!.findings).toHaveLength(1);
+    expect(state.audit!.findings[0]).toMatchObject({ where: "Card: Probe Beta", severity: "major", source: "model" });
+    expect(JSON.stringify(state)).not.toContain("HIDDEN_DETAIL");
+
+    const chats = requests.filter((r) => r.url.includes("chat/completions"));
+    const betaPrompts = chats.filter((r) => stageOf(r).stage === "card" && stageOf(r).sub === "beta").map((r) => stageOf(r).system);
+    expect(betaPrompts).toHaveLength(3);
+    expect(betaPrompts[0]).not.toContain("REVISION NOTES");
+    expect(betaPrompts[2]).toContain("FIX_BETA_TIMELINE");
+    // Other cards were not regenerated.
+    expect(chats.filter((r) => stageOf(r).sub === "alpha")).toHaveLength(1);
+
+    const zip = readZip((await app.inject({ method: "GET", url: `/api/projects/${id}/export`, headers: { host } })).rawPayload);
+    const report = zip.get("probe-case/qa-report.md")!.toString();
+    expect(report).toMatch(/1 open findings \(1 major\)/);
+    expect(report).toContain("Card: Probe Beta");
+    expect(report).not.toContain("HIDDEN_DETAIL");
+
+    await app.inject({ method: "PATCH", url: "/api/settings", headers: write, payload: { showSpoilers: true } });
+    const revealed = (await app.inject({ method: "GET", url: `/api/projects/${id}/generation`, headers: { host } })).json() as GenerationState;
+    expect(revealed.audit!.findings[0]!.detail).toBe("HIDDEN_DETAIL");
+  });
+
+  it("uses embeddings for duplicate candidates when an embedding model is assigned", async () => {
+    const { id, requests } = await setup({ embeddings: true });
+    const state = await run(id);
+    expect(requests.some((r) => r.url.includes("/embeddings"))).toBe(true);
+    expect(state.audit!.checked.join(" ")).toMatch(/Paraphrased duplicates by embeddings \(N · e1\)/);
+  });
+});

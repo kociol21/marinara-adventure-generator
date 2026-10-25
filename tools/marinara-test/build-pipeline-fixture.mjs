@@ -2,7 +2,11 @@
 // pass the stage checks for a "medium" adventure. Run: node tools/marinara-test/build-pipeline-fixture.mjs
 import { writeFileSync } from "node:fs";
 
-const filler = (marker, words = 60) => `${marker} ${Array.from({ length: words }, (_, i) => `probe${i % 7}`).join(" ")}.`;
+// Filler words derive from the marker, so entries do not share six-word runs (the audit would flag copies).
+const filler = (marker, words = 60) => {
+  const stem = marker.toLowerCase().replace(/[^a-z0-9]/g, "");
+  return `${marker} ${Array.from({ length: words }, (_, i) => `${stem}w${i}`).join(" ")}.`;
+};
 
 const entities = [
   ["alpha", "character", "Probe Alpha", true],
@@ -146,6 +150,8 @@ const fixture = {
     exampleDialogue: "",
   },
   lorebooks,
+  "audit-review": { findings: [] },
+  "audit-spoilers": { findings: [] },
   opening: {
     teaser: "A neutral probe adventure at a probe harbor.",
     openingMessage: "OPENING_MESSAGE_ALPHA",

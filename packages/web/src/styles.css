@@ -427,6 +427,26 @@ a.button {
   text-decoration: none;
 }
 
+.audit {
+  border-top: 1px solid var(--border);
+  margin-top: 12px;
+  padding-top: 4px;
+}
+
+.audit h3 {
+  margin: 8px 0 4px;
+}
+
+.audit-area ul {
+  margin: 4px 0 10px;
+  padding-left: 20px;
+}
+
+.badge-major {
+  color: var(--danger);
+  border-color: currentColor;
+}
+
 .teaser {
   font-style: italic;
   border-left: 3px solid var(--border);

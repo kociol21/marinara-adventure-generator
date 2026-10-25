@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import type { GenerationState, Requirements, StageView } from "@adv/shared";
+import type { AuditReportView, GenerationState, Requirements, StageView } from "@adv/shared";
 import type { FastifyBaseLogger } from "fastify";
 import type { InterviewRepo } from "../repos/interview.ts";
 import type { ProjectsRepo } from "../repos/projects.ts";
@@ -7,7 +7,9 @@ import type { SettingsRepo } from "../repos/settings.ts";
 import type { StageRow, StagesRepo } from "../repos/stages.ts";
 import { GenerationError, type TextGenerator } from "../generation/text.ts";
 import { PROMPT_VERSION } from "./prompts.ts";
-import { buildStages, PackageInvalidError, type AssembleOutput, type StageContext, type StageDef } from "./stages.ts";
+import { buildStages, FIXABLE_STAGE, PackageInvalidError, type AssembleOutput, type StageContext, type StageDef } from "./stages.ts";
+import type { AuditOutput } from "../audit/units.ts";
+import type { Embedder } from "../generation/embeddings.ts";
 import type { Opening, Plan } from "./schemas.ts";
 
 export class PipelineError extends Error {
@@ -27,6 +29,7 @@ interface Deps {
   projects: ProjectsRepo;
   settings: SettingsRepo;
   text: TextGenerator;
+  embedder?: Embedder;
   log?: FastifyBaseLogger;
 }
 
@@ -50,12 +53,16 @@ export function createPipeline(deps: Deps) {
     return buildStages(requirements, plan?.status === "done" ? (plan.output as Plan) : null);
   }
 
-  function inputHash(def: StageDef, hashBase: string, title: string, rows: Map<string, StageRow>): string {
-    // The version joins the hash only when set, so existing stage hashes stay valid.
+  type Notes = Map<string, string[]>;
+
+  function inputHash(def: StageDef, hashBase: string, title: string, rows: Map<string, StageRow>, notes: Notes): string {
+    // Version and audit notes join the hash only when present, so existing stage hashes stay valid.
+    const stageNotes = notes.get(def.id) ?? [];
     return sha([
       PROMPT_VERSION,
       def.id,
       ...(def.version ? [`v${def.version}`] : []),
+      ...(stageNotes.length ? [`notes:${sha(stageNotes)}`] : []),
       hashBase,
       title,
       ...def.deps.map((d) => rows.get(d)?.outputHash ?? "missing"),
@@ -63,9 +70,14 @@ export function createPipeline(deps: Deps) {
   }
 
   /** Done and still valid for the current inputs. */
-  function isCurrent(def: StageDef, hashBase: string, title: string, rows: Map<string, StageRow>): boolean {
+  function isCurrent(def: StageDef, hashBase: string, title: string, rows: Map<string, StageRow>, notes: Notes): boolean {
     const row = rows.get(def.id);
-    return row?.status === "done" && row.inputHash === inputHash(def, hashBase, title, rows);
+    return row?.status === "done" && row.inputHash === inputHash(def, hashBase, title, rows, notes);
+  }
+
+  /** Major findings the audit can send back to a rendering stage. */
+  function fixable(audit: AuditOutput | undefined) {
+    return (audit?.findings ?? []).filter((f) => f.severity === "major" && f.target && FIXABLE_STAGE.test(f.target));
   }
 
   function state(projectId: string): GenerationState {
@@ -74,14 +86,15 @@ export function createPipeline(deps: Deps) {
     const current = deps.interview.current(projectId);
     const rows = deps.stages.all(projectId);
     if (!project || !current?.approvedAt) {
-      return { running: jobs.has(projectId), stages: [], warnings: [], notes: [], ready: false };
+      return { running: jobs.has(projectId), stages: [], warnings: [], notes: [], ready: false, audit: null };
     }
     const hashBase = sha(current.requirements);
     const defs = definitions(current.requirements, rows);
+    const notes = deps.stages.notes(projectId, hashBase);
     const calls = deps.stages.callCounts(projectId);
     const stages: StageView[] = defs.map((def) => {
       const row = rows.get(def.id);
-      const stale = row?.status === "done" && !isCurrent(def, hashBase, project.title, rows);
+      const stale = row?.status === "done" && !isCurrent(def, hashBase, project.title, rows, notes);
       return {
         id: def.id,
         label: def.label,
@@ -98,7 +111,26 @@ export function createPipeline(deps: Deps) {
     const ready = stages.length > 1 && stages.every((s) => s.status === "done");
     const issues = ready ? (assembled!.output as AssembleOutput).issues : [];
     const of = (severity: string) => issues.filter((i) => i.severity === severity).map((i) => i.summary);
-    return { running: jobs.has(projectId), stages, warnings: of("warning"), notes: of("info"), ready };
+    const auditRow = rows.get("audit");
+    const auditOut = auditRow?.status === "done" ? (auditRow.output as AuditOutput) : null;
+    const audit: AuditReportView | null = auditOut
+      ? {
+          fixRounds: deps.stages.fixRounds(projectId, hashBase),
+          maxFixRounds: deps.settings.get().maxAutoFixAttempts,
+          checked: auditOut.checked,
+          notChecked: auditOut.notChecked,
+          findings: auditOut.findings.map((f) => ({
+            id: f.id,
+            area: f.area,
+            severity: f.severity,
+            where: f.where,
+            summary: f.summary,
+            source: f.source,
+            ...(showSpoilers ? { detail: f.detail } : {}),
+          })),
+        }
+      : null;
+    return { running: jobs.has(projectId), stages, warnings: of("warning"), notes: of("info"), ready, audit };
   }
 
   async function run(projectId: string, job: { cancelled: boolean }): Promise<void> {
@@ -114,9 +146,17 @@ export function createPipeline(deps: Deps) {
       }
       const rows = deps.stages.all(projectId);
       const defs = definitions(requirements, rows);
+      const notes = deps.stages.notes(projectId, hashBase);
       if (rows.get("plan")?.status === "done") deps.stages.prune(projectId, defs.map((d) => d.id));
-      const next = defs.find((def) => !isCurrent(def, hashBase, project.title, rows));
+      const next = defs.find((def) => !isCurrent(def, hashBase, project.title, rows, notes));
       if (!next) {
+        // Everything is current. Send major audit findings back to their stages, up to the round limit (spec §15).
+        const toFix = fixable(rows.get("audit")?.output as AuditOutput | undefined);
+        const round = deps.stages.fixRounds(projectId, hashBase);
+        if (toFix.length > 0 && round < repairAttempts) {
+          deps.stages.addNotes(projectId, hashBase, round + 1, toFix.map((f) => ({ stage: f.target!, note: f.fix ?? f.detail })));
+          continue;
+        }
         deps.projects.setStatus(projectId, "ready");
         return;
       }
@@ -128,6 +168,8 @@ export function createPipeline(deps: Deps) {
         text: deps.text,
         repairAttempts,
         has: (id) => rows.get(id)?.status === "done",
+        notes: (id) => notes.get(id) ?? [],
+        embedder: deps.embedder ?? null,
         output: <T>(id: string) => {
           const row = rows.get(id);
           if (row?.status !== "done") throw new Error(`Stage ${id} has no result.`);
@@ -135,7 +177,7 @@ export function createPipeline(deps: Deps) {
         },
       };
 
-      deps.stages.start(projectId, next.id, inputHash(next, hashBase, project.title, rows));
+      deps.stages.start(projectId, next.id, inputHash(next, hashBase, project.title, rows, notes));
       try {
         const output = await next.run(ctx);
         deps.stages.finish(projectId, next.id, output, sha(output), next.summary(output));

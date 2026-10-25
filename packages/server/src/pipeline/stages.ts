@@ -1,4 +1,7 @@
 import type { AdventurePackage, CardDraft, LorebookDraft, Requirements } from "@adv/shared";
+import type { Embedder } from "../generation/embeddings.ts";
+import { runAudit } from "../audit/audit.ts";
+import type { AuditOutput } from "../audit/units.ts";
 import { adventurePackageSchema, lorebookEntryDraftSchema } from "@adv/shared";
 import type { TextGenerator } from "../generation/text.ts";
 import { validatePackage, type PackageIssue } from "../marinara/validate.ts";
@@ -32,6 +35,9 @@ export interface StageContext {
   /** Output of a finished dependency. */
   output<T>(stageId: string): T;
   has(stageId: string): boolean;
+  /** Audit fix notes for a stage (empty when none). */
+  notes(stageId: string): string[];
+  embedder: Embedder | null;
 }
 
 export interface StageDef {
@@ -55,8 +61,15 @@ function llmStage<S extends z.ZodType>(
   system: string,
   check?: (value: z.infer<S>) => string[],
 ): Promise<z.infer<S>> {
-  return ctx.text.generateJson(schema, { projectId: ctx.projectId, purpose, system, messages: KICKOFF }, ctx.repairAttempts, check);
+  const notes = ctx.notes(purpose);
+  const revised = notes.length
+    ? `${system}\n\nREVISION NOTES from the quality audit of the previous version. Write your part so these problems are gone, and keep everything else consistent with the plan and facts:\n${notes.map((n) => `- ${n}`).join("\n")}`
+    : system;
+  return ctx.text.generateJson(schema, { projectId: ctx.projectId, purpose, system: revised, messages: KICKOFF }, ctx.repairAttempts, check);
 }
+
+/** Stages the audit may send fix notes to: renderings only. Plan and facts would cascade into everything. */
+export const FIXABLE_STAGE = /^(card:[a-z0-9-]+|persona|lorebook:[a-z]+|opening)$/;
 
 // ── Code checks (spec §12: structure is checked by code) ──
 
@@ -276,7 +289,44 @@ export function buildStages(requirements: Requirements, plan: Plan | null): Stag
     },
   });
 
+  stages.push({
+    id: "audit",
+    label: "Quality audit",
+    deps: ["assemble", "plan", "facts", ...(plan.isMystery ? ["clues"] : [])],
+    run: (ctx) => {
+      const p = ctx.output<Plan>("plan");
+      const assembled = ctx.output<AssembleOutput>("assemble");
+      return runAudit({
+        projectId: ctx.projectId,
+        requirements: ctx.requirements,
+        pkg: assembled.package,
+        issues: assembled.issues,
+        plan: p,
+        facts: ctx.output<Facts>("facts"),
+        clues: ctx.has("clues") ? ctx.output<Clues>("clues") : null,
+        targets: fixTargets(p, assembled.package),
+        text: ctx.text,
+        embedder: ctx.embedder,
+        repairAttempts: ctx.repairAttempts,
+      });
+    },
+    summary: (o) => {
+      const f = (o as AuditOutput).findings;
+      return f.length === 0 ? "no findings" : `${plural(f.length, "finding")} (${f.filter((x) => x.severity === "major").length} major)`;
+    },
+  });
+
   return stages;
+}
+
+/** Stages the audit can name as targets, with labels that show only what the player may see. */
+export function fixTargets(plan: Plan, pkg: AdventurePackage): Map<string, string> {
+  const targets = new Map<string, string>();
+  for (const e of plan.entities.filter((x) => x.isCard)) targets.set(`card:${e.key}`, `Card: ${e.name}`);
+  if (pkg.persona) targets.set("persona", "Persona");
+  for (const lb of pkg.lorebooks) targets.set(`lorebook:${lb.key}`, `Lorebook: ${lb.name}`);
+  targets.set("opening", "Opening scene and teaser");
+  return targets;
 }
 
 // ── Assembly (code only) ──

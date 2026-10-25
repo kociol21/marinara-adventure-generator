@@ -1,7 +1,8 @@
 import { createHash } from "node:crypto";
-import type { AdventurePackage } from "@adv/shared";
+import { AUDIT_AREA_LABELS, type AdventurePackage, type AuditReportView } from "@adv/shared";
 import { GENERATOR_NAME, slugify, toNative, type NativeEnvelope } from "./native.ts";
 import { validatePackage, type PackageIssue } from "./validate.ts";
+export type { PackageIssue };
 import { createZip, type ZipFile } from "./zip.ts";
 import packageJson from "../../package.json" with { type: "json" };
 
@@ -50,7 +51,43 @@ const json = (value: unknown) => Buffer.from(`${JSON.stringify(value, null, 2)}\
  * manifest. Structural validation runs first and errors block the export (spec §14: the app,
  * not the model, enforces checks before export). Secret Plot is never written to files.
  */
-export function buildExport(pkg: AdventurePackage, createdAt = new Date().toISOString()): ExportResult {
+/** Spoiler-free QA report for the bundle (spec §5.8, §12): status, scope, findings by place, limits. */
+export function qaReport(pkg: AdventurePackage, audit: AuditReportView | null, issues: PackageIssue[]): string {
+  const lines = [`# Quality report: ${pkg.title}`, ""];
+  if (!audit) {
+    lines.push("The quality audit has not run for this package. Only structural validation was done.", "");
+  } else {
+    const major = audit.findings.filter((f) => f.severity === "major").length;
+    lines.push(
+      `Status: ${audit.findings.length === 0 ? "no open findings" : `${audit.findings.length} open findings (${major} major)`}.`,
+      `Automatic fix rounds used: ${audit.fixRounds} of ${audit.maxFixRounds}.`,
+      "",
+      "Findings below name only places you can see (cards, lorebooks, the teaser) and never quote hidden content.",
+      "Model-based checks are heuristic: no findings does not prove there are no contradictions or spoilers.",
+      "",
+      "## Checked",
+      "",
+      ...audit.checked.map((c) => `- ${c}`),
+      "",
+      "## Not checked",
+      "",
+      ...audit.notChecked.map((c) => `- ${c}`),
+      "",
+    );
+    if (audit.findings.length) {
+      lines.push("## Open findings", "");
+      for (const f of audit.findings) lines.push(`- **${f.severity}** · ${AUDIT_AREA_LABELS[f.area]} · ${f.summary}${f.source === "model" ? " _(model review)_" : ""}`);
+      lines.push("");
+    }
+  }
+  const warnings = issues.filter((i) => i.severity !== "error");
+  if (warnings.length) {
+    lines.push("## Validation notes", "", ...warnings.map((i) => `- ${i.summary}`), "");
+  }
+  return lines.join("\n");
+}
+
+export function buildExport(pkg: AdventurePackage, createdAt = new Date().toISOString(), audit: AuditReportView | null = null): ExportResult {
   const issues = validatePackage(pkg);
   if (issues.some((i) => i.severity === "error")) throw new ExportBlockedError(issues);
 
@@ -67,6 +104,7 @@ export function buildExport(pkg: AdventurePackage, createdAt = new Date().toISOS
     add(uniquePath(used, `${dir}/${safeFileName(name)}.marinara.json`), json(env), kind);
 
   add("START-HERE.md", Buffer.from(startGuide(pkg), "utf8"), "guide");
+  add("qa-report.md", Buffer.from(qaReport(pkg, audit, issues), "utf8"), "guide");
   for (const { card, envelope } of native.characters) addEnvelope("characters", card.name, envelope, "character");
   if (native.persona && pkg.persona) addEnvelope("persona", pkg.persona.name, native.persona, "persona");
   for (const { lorebook, envelope } of native.lorebooks) addEnvelope("lorebooks", lorebook.name, envelope, "lorebook");
@@ -100,8 +138,8 @@ export function buildExport(pkg: AdventurePackage, createdAt = new Date().toISOS
   return { slug, files, manifest, issues };
 }
 
-export function buildExportZip(pkg: AdventurePackage): { fileName: string; zip: Buffer; result: ExportResult } {
-  const result = buildExport(pkg);
+export function buildExportZip(pkg: AdventurePackage, audit: AuditReportView | null = null): { fileName: string; zip: Buffer; result: ExportResult } {
+  const result = buildExport(pkg, undefined, audit);
   return { fileName: `${result.slug}.zip`, zip: createZip(result.files), result };
 }
 

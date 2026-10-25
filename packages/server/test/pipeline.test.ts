@@ -32,7 +32,7 @@ type Override = (stage: string, sub: string | null, attempt: number) => string |
 
 function stageOf(req: RecordedRequest) {
   const system = (req.body as { messages: Array<{ role: string; content: string }> }).messages[0]!.content;
-  const stage = system.match(/^Stage: (\w+)/m)?.[1] ?? "?";
+  const stage = system.match(/^Stage: ([\w-]+)/m)?.[1] ?? "?";
   const sub = system.match(/^Card key: (\S+)/m)?.[1] ?? system.match(/^Lorebook: (\w+)/m)?.[1] ?? null;
   return { stage, sub, id: sub ? `${stage}:${sub}` : stage };
 }
@@ -80,7 +80,20 @@ async function runToEnd(id: string, url = `/api/projects/${id}/generation/start`
   return (await app.inject({ method: "GET", url: `/api/projects/${id}/generation`, headers: { host } })).json();
 }
 
-const LLM_STAGES = ["plan", "facts", "clues", "card:alpha", "card:beta", "persona", "lorebook:world", "lorebook:characters", "lorebook:plot", "opening"];
+const LLM_STAGES = [
+  "plan",
+  "facts",
+  "clues",
+  "card:alpha",
+  "card:beta",
+  "persona",
+  "lorebook:world",
+  "lorebook:characters",
+  "lorebook:plot",
+  "opening",
+  "audit-review",
+  "audit-spoilers",
+];
 
 afterEach(async () => {
   await app?.close();
@@ -101,7 +114,7 @@ describe("generation pipeline", () => {
     const { id, stageCalls } = await setup();
     const state = await runToEnd(id);
     expect(state.ready).toBe(true);
-    expect(state.stages.map((s) => s.id)).toEqual([...LLM_STAGES.slice(0, 5), "persona", ...LLM_STAGES.slice(6), "assemble"]);
+    expect(state.stages.map((s) => s.id)).toEqual([...LLM_STAGES.slice(0, 10), "assemble", "audit"]);
     expect(state.stages.every((s) => s.status === "done")).toBe(true);
     expect(stageCalls()).toEqual(LLM_STAGES);
 
@@ -144,7 +157,16 @@ describe("generation pipeline", () => {
     const before = stageCalls().length;
     const resumed = await runToEnd(id);
     expect(resumed.ready).toBe(true);
-    expect(stageCalls().slice(before)).toEqual(["card:beta", "persona", "lorebook:world", "lorebook:characters", "lorebook:plot", "opening"]);
+    expect(stageCalls().slice(before)).toEqual([
+      "card:beta",
+      "persona",
+      "lorebook:world",
+      "lorebook:characters",
+      "lorebook:plot",
+      "opening",
+      "audit-review",
+      "audit-spoilers",
+    ]);
   });
 
   it("regenerates one card and only what depends on it", async () => {

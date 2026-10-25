@@ -1,4 +1,5 @@
 import { z } from "zod";
+import type { AuditReportView } from "./audit.ts";
 
 export const projectStatusSchema = z.enum(["draft", "interview", "approved", "generating", "ready", "exported"]);
 export type ProjectStatus = z.infer<typeof projectStatusSchema>;
@@ -39,6 +40,8 @@ export interface GenerationState {
   warnings: string[];
   /** Informational notes from validation (not problems). */
   notes: string[];
+  /** Quality audit of the latest assembled package, when it has run. */
+  audit: AuditReportView | null;
   ready: boolean;
 }
 

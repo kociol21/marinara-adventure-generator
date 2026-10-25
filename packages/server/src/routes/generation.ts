@@ -37,7 +37,10 @@ export const generationRoutes: FastifyPluginAsync<{ pipeline: Pipeline }> = asyn
     const assembled = pipeline.assembled(req.params.id);
     if (!assembled) return reply.status(409).send({ error: "Finish generation before exporting." });
     try {
-      const { fileName, zip } = buildExportZip(assembled.package);
+      // The bundle's QA report never carries details, whatever the spoiler setting.
+      const audit = pipeline.state(req.params.id).audit;
+      const spoilerFree = audit ? { ...audit, findings: audit.findings.map(({ detail: _detail, ...f }) => f) } : null;
+      const { fileName, zip } = buildExportZip(assembled.package, spoilerFree);
       return reply
         .header("Content-Type", "application/zip")
         .header("Content-Disposition", `attachment; filename="${fileName}"`)

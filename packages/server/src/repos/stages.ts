@@ -96,6 +96,27 @@ export function createStagesRepo(db: Db) {
       return new Map(rows.map((r) => [r.stage, r.calls]));
     },
 
+    /** Audit fix notes per stage, for the given requirements basis. */
+    notes(projectId: string, basis: string): Map<string, string[]> {
+      const rows = db
+        .prepare("SELECT stage, note FROM stage_note WHERE project_id = ? AND basis = ? ORDER BY id")
+        .all(projectId, basis) as Array<{ stage: string; note: string }>;
+      const out = new Map<string, string[]>();
+      for (const r of rows) out.set(r.stage, [...(out.get(r.stage) ?? []), r.note]);
+      return out;
+    },
+
+    fixRounds(projectId: string, basis: string): number {
+      const row = db.prepare("SELECT MAX(round) AS r FROM stage_note WHERE project_id = ? AND basis = ?").get(projectId, basis) as { r: number | null };
+      return row.r ?? 0;
+    },
+
+    addNotes(projectId: string, basis: string, round: number, notes: Array<{ stage: string; note: string }>): void {
+      const insert = db.prepare("INSERT INTO stage_note (project_id, basis, stage, round, note, created_at) VALUES (?, ?, ?, ?, ?, ?)");
+      const now = new Date().toISOString();
+      for (const n of notes) insert.run(projectId, basis, n.stage, round, n.note, now);
+    },
+
     /** After a crash or restart nothing is running any more. */
     resetRunning(): void {
       db.prepare("UPDATE stage_run SET status = 'failed', error = 'Interrupted (the app stopped). Resume to continue.' WHERE status = 'running'").run();

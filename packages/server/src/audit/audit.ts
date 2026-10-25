@@ -1,0 +1,112 @@
+import type { AdventurePackage, Requirements } from "@adv/shared";
+import type { TextGenerator } from "../generation/text.ts";
+import { GenerationError } from "../generation/text.ts";
+import { cosine, type Embedder } from "../generation/embeddings.ts";
+import type { PackageIssue } from "../marinara/validate.ts";
+import type { Clues, Facts, Plan } from "../pipeline/schemas.ts";
+import { findDuplicates, findSpoilers, findUnreachableClues, structureFindings } from "./code-checks.ts";
+import { qualityReviewPrompt, qualityReviewSchema, spoilerReviewPrompt, spoilerReviewSchema, toFindings } from "./review.ts";
+import { textUnits, type AuditFinding, type AuditOutput, type TextUnit } from "./units.ts";
+
+export interface AuditInput {
+  projectId: string;
+  requirements: Requirements;
+  pkg: AdventurePackage;
+  issues: PackageIssue[];
+  plan: Plan;
+  facts: Facts;
+  clues: Clues | null;
+  /** Stage id → spoiler-free label, for stages that can be regenerated with a fix note. */
+  targets: Map<string, string>;
+  text: TextGenerator;
+  embedder: Embedder | null;
+  repairAttempts: number;
+}
+
+const KICKOFF = [{ role: "user" as const, content: "Produce the JSON now." }];
+
+/** Pairs of units that mean nearly the same thing, by embeddings; the quality review judges them. */
+async function semanticCandidates(input: AuditInput, units: TextUnit[], already: AuditFinding[]) {
+  const pool = units.filter((u) => u.kind === "card-field" || u.kind === "entry" || u.kind === "persona-field");
+  const vectors = await input.embedder!.embed(
+    pool.map((u) => u.text.slice(0, 2000)),
+    input.projectId,
+    "audit-embeddings",
+  );
+  const pairs: Array<{ a: TextUnit; b: TextUnit; similarity: number }> = [];
+  for (let i = 0; i < pool.length; i++) {
+    for (let j = i + 1; j < pool.length; j++) pairs.push({ a: pool[i]!, b: pool[j]!, similarity: cosine(vectors[i]!, vectors[j]!) });
+  }
+  if (pairs.length === 0) return [];
+  // Embedding models differ in their baseline similarity, so flag outliers relative to this package.
+  const mean = pairs.reduce((n, p) => n + p.similarity, 0) / pairs.length;
+  const sd = Math.sqrt(pairs.reduce((n, p) => n + (p.similarity - mean) ** 2, 0) / pairs.length);
+  const flagged = new Set(already.map((f) => f.where));
+  return pairs
+    .filter((p) => p.similarity >= Math.max(0.85, mean + 3 * sd) && !flagged.has(`${p.a.where} and ${p.b.where}`))
+    .sort((x, y) => y.similarity - x.similarity)
+    .slice(0, 15);
+}
+
+/** Runs every check of spec §12 that this version can run, and says which it could not. */
+export async function runAudit(input: AuditInput): Promise<AuditOutput> {
+  const units = textUnits(input.pkg);
+  const checked: string[] = [
+    "Structure, limits and references (code)",
+    "Near-verbatim repetition across cards, persona, lorebooks and opening (code)",
+    "Secret facts echoed in names, tags, teaser, persona and greetings (code heuristic)",
+  ];
+  const notChecked: string[] = [
+    "Portraits against Appearance (no avatars yet)",
+    "Behaviour inside Marinara after import (use Push to Marinara or import manually)",
+  ];
+
+  const findings: AuditFinding[] = [
+    ...structureFindings(input.issues),
+    ...findDuplicates(units),
+    ...findSpoilers(units, input.facts.facts),
+    ...findUnreachableClues(input.pkg, input.plan, input.clues),
+  ];
+  if (input.clues) checked.push("Every clue surfaces when its place or person comes up (activation simulator)");
+
+  let candidates: Array<{ a: TextUnit; b: TextUnit; similarity: number }> = [];
+  const embedding = input.embedder?.describe() ?? null;
+  if (embedding) {
+    try {
+      candidates = await semanticCandidates(input, units, findings);
+      checked.push(`Paraphrased duplicates by embeddings (${embedding}), judged by the quality review`);
+    } catch (error) {
+      notChecked.push(`Paraphrased duplicates by embeddings: ${error instanceof GenerationError ? error.message : "embedding request failed"}`);
+    }
+  } else {
+    notChecked.push("Paraphrased duplicates by embeddings (no embedding model assigned; the quality review still looks for them)");
+  }
+
+  const quality = await input.text.generateJson(
+    qualityReviewSchema,
+    {
+      projectId: input.projectId,
+      purpose: "audit-review",
+      system: qualityReviewPrompt(input.requirements, input.plan, input.facts, input.clues, input.pkg, input.targets, candidates),
+      messages: KICKOFF,
+    },
+    input.repairAttempts,
+  );
+  findings.push(...toFindings(null, quality.findings, input.targets));
+  checked.push("Consistency, distinct voices, paraphrased duplicates, mystery logic and prose voice (model review, heuristic)");
+
+  const spoilers = await input.text.generateJson(
+    spoilerReviewSchema,
+    {
+      projectId: input.projectId,
+      purpose: "audit-spoilers",
+      system: spoilerReviewPrompt(input.plan, input.facts, units.filter((u) => u.visible), input.targets),
+      messages: KICKOFF,
+    },
+    input.repairAttempts,
+  );
+  findings.push(...toFindings("spoilers", spoilers.findings, input.targets));
+  checked.push("Spoilers in everything the player sees (model review, heuristic)");
+
+  return { findings, checked, notChecked };
+}
