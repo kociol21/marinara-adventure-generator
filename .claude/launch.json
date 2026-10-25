@@ -2,6 +2,12 @@
   "version": "0.0.1",
   "configurations": [
     {
+      "name": "app",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": ["--yes", "pnpm@12.15.0", "start"],
+      "port": 7880
+    },
+    {
       "name": "marinara-test",
       "runtimeExecutable": "node",
       "runtimeArgs": ["tools/marinara-test/start.mjs"],

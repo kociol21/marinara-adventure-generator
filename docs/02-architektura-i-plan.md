@@ -10,7 +10,7 @@ Dokument z 25 października 2026 r. Opiera się na wynikach z [01-weryfikacja-te
 | Runtime | Node.js 24 | Zgodny z Marinarą 2.5.1 i już zainstalowany na komputerze. |
 | Backend | Fastify | Lekki, z dobrym wsparciem walidacji schematów. Marinara też go używa, więc łatwiej porównywać zachowanie. |
 | Walidacja | Zod | Jeden schemat służy do walidacji wyjścia modeli, argumentów narzędzi i formatów eksportu. |
-| Baza | SQLite (better-sqlite3) + Drizzle ORM | Lokalnie, jeden plik, transakcje i trwałość etapów bez serwera bazy. |
+| Baza | SQLite przez wbudowany `node:sqlite`, własne migracje (`PRAGMA user_version`) i repozytoria SQL | Lokalnie, jeden plik, transakcje i trwałość etapów bez serwera bazy. Bez natywnej kompilacji i bez ORM (zmiana względem pierwotnego planu z better-sqlite3 + Drizzle przy M0). |
 | Frontend | React + Vite + TanStack Query | Prosty SPA serwowany przez backend. Bez SSR, bo aplikacja jest lokalna. |
 | Repozytorium | pnpm workspace: `server`, `web`, `shared` | `shared` zawiera schematy formatów Marinary i kontrakty API. |
 | Sekrety | Systemowy magazyn poświadczeń (Windows Credential Manager przez `@napi-rs/keyring`) | Klucze API nie trafiają do SQLite, logów ani frontendu. |

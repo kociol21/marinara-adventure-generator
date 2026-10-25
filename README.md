@@ -1,0 +1,35 @@
+# Marinara Adventure Generator
+
+Local web app that prepares complete, spoiler-free adventures (character cards, persona, lorebooks, Secret Plot seed, opening) for [Marinara Engine](https://github.com/Pasta-Devs/Marinara-Engine). See the [specification](Marinara-Adventure-Generator-SPEC.md), [technical verification](docs/01-weryfikacja-techniczna.md) and [architecture plan](docs/02-architektura-i-plan.md).
+
+Status: milestone M0 (app skeleton).
+
+## Requirements
+
+- Node.js 24+
+- pnpm 12.15.0, used through `npx --yes pnpm@12.15.0` (no global install needed)
+
+## Run
+
+```bash
+npx --yes pnpm@12.15.0 install
+npx --yes pnpm@12.15.0 build
+npx --yes pnpm@12.15.0 start
+```
+
+Open http://127.0.0.1:7880. For development with hot reload, use `npx --yes pnpm@12.15.0 dev` and open http://127.0.0.1:5173.
+
+## Where data lives
+
+- Projects and settings: `data/app.db` (SQLite, override with `DATA_DIR`). Not committed.
+- API keys and tokens: the operating system credential store (Windows Credential Manager), under the service name `marinara-adventure-generator`. The database stores only secret names.
+- The server listens on `127.0.0.1` only and rejects foreign `Host`/`Origin` headers.
+
+## Checks
+
+```bash
+npx --yes pnpm@12.15.0 typecheck
+npx --yes pnpm@12.15.0 test
+```
+
+Marinara integration test tools live in `tools/marinara-test/` (local Marinara clone under `vendor/`, mock LLM, import and activation probes).

@@ -1,0 +1,9 @@
+packages:
+  - packages/*
+
+# Supply-chain guardrail: refuse package versions published less than a day ago.
+minimumReleaseAge: 1440
+
+# Dependencies permitted to run install scripts.
+allowBuilds:
+  esbuild: true

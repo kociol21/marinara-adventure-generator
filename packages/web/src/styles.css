@@ -1,0 +1,210 @@
+:root {
+  --bg: #f6f5f2;
+  --surface: #ffffff;
+  --text: #1d1d1f;
+  --muted: #6b6b70;
+  --border: #dedcd6;
+  --accent: #8c2f39;
+  --accent-text: #ffffff;
+  --danger: #b42318;
+  color-scheme: light;
+  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #141416;
+    --surface: #1e1e21;
+    --text: #ececef;
+    --muted: #9a9aa2;
+    --border: #34343a;
+    --accent: #d0606b;
+    --accent-text: #141416;
+    --danger: #f97066;
+    color-scheme: dark;
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+}
+
+.topbar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 24px;
+  padding: 12px 16px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+}
+
+.brand {
+  font-weight: 700;
+}
+
+.topbar nav {
+  display: flex;
+  gap: 16px;
+  flex: 1;
+}
+
+.topbar nav a {
+  color: var(--muted);
+  text-decoration: none;
+}
+
+.topbar nav a.active {
+  color: var(--text);
+  font-weight: 600;
+}
+
+.status {
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.status-bad {
+  color: var(--danger);
+}
+
+main {
+  max-width: 880px;
+  margin: 0 auto;
+  padding: 24px 16px 64px;
+}
+
+h1 {
+  margin-top: 0;
+}
+
+.row {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.row input {
+  flex: 1;
+  min-width: 200px;
+}
+
+input,
+select,
+button {
+  font: inherit;
+  padding: 8px 12px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+}
+
+button {
+  background: var(--accent);
+  color: var(--accent-text);
+  border-color: var(--accent);
+  cursor: pointer;
+}
+
+button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+button.danger {
+  background: transparent;
+  color: var(--danger);
+  border-color: var(--danger);
+}
+
+.cards {
+  list-style: none;
+  padding: 0;
+  display: grid;
+  gap: 12px;
+}
+
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 14px 16px;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 4px 12px;
+}
+
+.card a {
+  color: var(--text);
+}
+
+.card p,
+.card small {
+  grid-column: 1 / -1;
+  margin: 0;
+}
+
+.badge {
+  font-size: 0.75rem;
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  color: var(--muted);
+  align-self: start;
+}
+
+.muted {
+  color: var(--muted);
+}
+
+.error {
+  color: var(--danger);
+}
+
+.field {
+  display: grid;
+  gap: 6px;
+  margin: 16px 0;
+}
+
+.field.checkbox {
+  grid-template-columns: auto 1fr;
+  align-items: start;
+}
+
+.field small {
+  display: block;
+}
+
+.facts {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 6px 16px;
+}
+
+.facts dt {
+  color: var(--muted);
+}
+
+.facts dd {
+  margin: 0;
+  word-break: break-all;
+}
+
+.placeholder {
+  border: 1px dashed var(--border);
+  border-radius: 8px;
+  padding: 4px 16px;
+  margin: 24px 0;
+}
+
+.danger-zone {
+  margin-top: 32px;
+}
