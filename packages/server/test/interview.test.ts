@@ -4,7 +4,7 @@ import { buildApp } from "../src/app.ts";
 import { openDatabase, type Db } from "../src/db/database.ts";
 import { MemorySecretStore } from "../src/secrets/secret-store.ts";
 import { extractJson } from "../src/generation/text.ts";
-import { isSpoilerQuestion, MAX_INTERVIEW_TURNS } from "../src/interview/interview.ts";
+import { cleanMustInclude, isSpoilerQuestion, MAX_INTERVIEW_TURNS } from "../src/interview/interview.ts";
 import { fakeFetch } from "./fake-fetch.ts";
 
 const PORT = 7880;
@@ -74,6 +74,13 @@ describe("interview helpers", () => {
     for (const q of ["Gritty or playful?", "How many characters at most?", "Second or third person?", "Any topics to avoid?"]) {
       expect(isSpoilerQuestion(q), q).toBe(false);
     }
+  });
+
+  it("drops mustInclude items copied from the pitch", () => {
+    const idea = "Noir in 1940 New York. Max 4 characters. A woman in red comes to me.";
+    expect(
+      cleanMustInclude(["Max 4 characters.", "A woman in red comes to me", "The client must be an elf"], idea, "Office, evening."),
+    ).toEqual(["The client must be an elf"]);
   });
 
   it("extracts JSON from fenced or chatty replies", () => {

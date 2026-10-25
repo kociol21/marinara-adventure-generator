@@ -25,6 +25,21 @@ export function isSpoilerQuestion(question: string): boolean {
   return SPOILER_QUESTION.test(question);
 }
 
+const normalize = (s: string) => s.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").trim();
+
+/**
+ * mustInclude is for plot details the player imposes beyond the other fields. Models tend to
+ * paste the whole pitch into it, which would later read as hard plot constraints; drop items
+ * that are just copied from the pitch or the starting situation.
+ */
+export function cleanMustInclude(items: string[], idea: string, startingSituation: string): string[] {
+  const sources = [normalize(idea), normalize(startingSituation)].filter(Boolean);
+  return items.filter((item) => {
+    const n = normalize(item);
+    return n.length > 0 && !sources.some((src) => src.includes(n));
+  });
+}
+
 export const interviewTurnSchema = z.object({
   message: z.string().trim().min(1).max(2000),
   questions: z.array(z.string().trim().min(1).max(300)).max(6).default([]),
@@ -41,12 +56,14 @@ const FIELD_GUIDE = `Requirements JSON fields:
 - narration: { pov: "second"|"third"|"first", tense: "present"|"past", style: short prose style note }.
 - setting: { era, place, technology, supernatural (how magic/fantasy works at a world level, no plot), notes }.
 - startingSituation: where the protagonist is and what is happening as play begins, as the player described it. Do not add hidden causes.
-- protagonist: { mode: "existing" (player brings a persona) | "new" (generator writes one), notes: wishes for the persona }.
+- protagonist: { mode, notes }. mode is "new" (the generator writes a persona) unless the player says they will use their own existing Marinara persona; describing who they play ("I am a private investigator") still means "new", with that description in notes.
 - maxNpcCards: upper limit of full NPC character cards (1-8). The protagonist does not count. More minor characters can live in lorebooks.
-- scale: { length: "one-shot"|"short"|"medium"|"long", notes }.
+- scale: { length, notes }. length: "one-shot" = one short session, "short" = one or two sessions, "medium" = a few sessions, "long" = a campaign.
 - content: { violence: "none"|"mild"|"moderate"|"graphic", romance: "none"|"background"|"possible"|"central", sexualContent: "none"|"fade-to-black"|"explicit", horror: "none"|"light"|"strong", hardLimits: topics that must never appear, notes }.
 - visualStyle: art direction for character portraits.
-- mustInclude: details the PLAYER explicitly imposed (record verbatim in English). Never add your own.`;
+- mustInclude: only concrete story details the player insists on that no other field captures (for example "the client must be an elf"). Never copy the pitch, the starting situation, the cast limit or any preference into it. It is usually empty. Never add details of your own.
+
+Every assumption must also be written into its field: never list an assumption the requirements object does not contain.`;
 
 export function interviewSystemPrompt(current: Requirements, turnsSoFar: number): string {
   const finalTurn = turnsSoFar + 1 >= MAX_INTERVIEW_TURNS;
@@ -60,7 +77,7 @@ The player wants to DISCOVER the story while playing. Therefore:
 How to interview:
 - Use everything the player already said; never ask for something already answered.
 - Ask at most ${MAX_QUESTIONS} short questions per turn, the most important first. Prefer quick choices ("grim or wry?") over open essays.
-- When something is left open and a sensible default exists, choose it and list it in "assumptions" (e.g. "Length: medium, about one long evening") instead of asking.
+- When something is left open and a sensible default exists, choose it, write it into the field and list it in "assumptions" (e.g. "Length: medium (a few sessions)") instead of asking.
 - The player may write in any language. Always reply in English and write every requirement value in English.
 - If the player volunteers a plot detail, record it in mustInclude without elaborating on it.
 - Set readyForSummary to true once genre, tone, era, place and the starting situation are clear and nothing important is undecided.${
@@ -120,7 +137,11 @@ export function createInterviewService(deps: { interview: InterviewRepo; project
 
       // The pitch is the player's own words; the model may not rewrite it.
       const idea = before.requirements.idea || content;
-      const requirements: Requirements = { ...turn.requirements, idea };
+      const requirements: Requirements = {
+        ...turn.requirements,
+        idea,
+        mustInclude: cleanMustInclude(turn.requirements.mustInclude, idea, turn.requirements.startingSituation),
+      };
       const questions = turn.questions.filter((q) => !isSpoilerQuestion(q)).slice(0, MAX_QUESTIONS);
       const lastTurn = turnsSoFar + 1 >= MAX_INTERVIEW_TURNS;
       const ready = (turn.readyForSummary || lastTurn) && missingEssentials(requirements).length === 0;
