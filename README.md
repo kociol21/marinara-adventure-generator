@@ -2,7 +2,7 @@
 
 Local web app that prepares complete, spoiler-free adventures (character cards, persona, lorebooks, Secret Plot seed, opening) for [Marinara Engine](https://github.com/Pasta-Devs/Marinara-Engine). See the [specification](Marinara-Adventure-Generator-SPEC.md), [technical verification](docs/01-weryfikacja-techniczna.md) and [architecture plan](docs/02-architektura-i-plan.md).
 
-Status: milestones M0 (app skeleton) and M1 (model connections: ChatGPT via Codex login, NanoGPT, OpenRouter, OpenAI-compatible; separate text, image and embedding model lists; explicit, cost-labelled tests; task assignments).
+Status: milestones M0 (app skeleton) and M1 (model connections: ChatGPT via Codex login, NanoGPT, OpenRouter, OpenAI-compatible; separate text, image and embedding model lists; explicit, cost-labelled tests; task assignments) and M2 (Marinara native formats, structural validation, export bundle, offline lorebook activation simulator checked against a real Marinara).
 
 ## Requirements
 
@@ -33,3 +33,13 @@ npx --yes pnpm@12.15.0 test
 ```
 
 Marinara integration test tools live in `tools/marinara-test/` (local Marinara clone under `vendor/`, mock LLM, import and activation probes).
+
+Differential test against a throwaway local Marinara (imports the exported probe package, compares stored fields and lorebook activation with the simulator, then deletes what it created):
+
+```bash
+node tools/marinara-test/start.mjs
+```
+
+```bash
+MARINARA_TEST_URL=http://127.0.0.1:7870 npx --yes pnpm@12.15.0 --filter @adv/server test:marinara
+```
