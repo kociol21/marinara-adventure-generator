@@ -1,0 +1,28 @@
+# Secrets and local config
+.env
+.env.*
+!.env.example
+*.key
+credentials*.json
+
+# Local project data, exports and logs
+data/
+exports/
+logs/
+*.log
+
+# Dependencies and build output
+node_modules/
+dist/
+build/
+__pycache__/
+.venv/
+
+# Local reference clones (e.g. Marinara for verification)
+vendor/
+
+# Editor / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
