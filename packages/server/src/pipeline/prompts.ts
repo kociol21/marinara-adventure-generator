@@ -1,12 +1,13 @@
 import type { Requirements } from "@adv/shared";
 import type { Clues, Entity, Fact, Facts, LorebookKey, Plan } from "./schemas.ts";
+import { scaleTargets } from "./scale.ts";
 
 /**
  * Stage prompts. Every prompt starts with "Stage: <id>" so logs and the mock model can tell
  * stages apart. All content is English (spec §22). Bump PROMPT_VERSION when a prompt changes
  * meaningfully: it is part of each stage's input hash, so affected stages re-run.
  */
-export const PROMPT_VERSION = "1";
+export const PROMPT_VERSION = "2";
 
 const JSON_ONLY = "Reply with ONLY one JSON object matching the shape below. No prose, no code fences.";
 
@@ -30,10 +31,12 @@ const COMMON = `You are part of a pipeline that writes a complete adventure for 
 All output is English. Stay inside the content limits. Do not decide the protagonist's actions, words or feelings.`;
 
 export function planPrompt(r: Requirements): string {
+  const t = scaleTargets(r);
   return `Stage: plan
 ${COMMON}
 
 Design the adventure's foundation: the objective truth, the cast and the world's important things.
+Size for a ${r.scale.length} adventure: at least ${t.entities} entities, including at least ${t.locations} locations the player can visit, at least ${t.minorCharacters} minor characters without cards (witnesses, rivals, fixers, officials), at least one organization and the items that matter. A living world has more people and places than the card cast; every one of them still needs a function.
 - Build a situation with motives and conflicts that reacts to the player, not a fixed sequence of scenes.
 - ${r.genre.toLowerCase().includes("myster") || r.genre.toLowerCase().includes("detective") || r.genre.toLowerCase().includes("noir") ? "This is a mystery: fix the truth now (culprit, motive, method, timeline). It must not change later." : "If the premise involves a mystery, fix its truth now; otherwise set isMystery to false."}
 - Supernatural rules that the solution depends on must be part of the world from the start, not invented for the finale.
@@ -65,7 +68,14 @@ Homes:
 - {"kind":"lorebook","lorebook":"world"} for setting rules, places, organizations, history, magic, customs.
 - {"kind":"lorebook","lorebook":"characters"} for minor characters and extra knowledge about card characters that needs its own trigger.
 - {"kind":"lorebook","lorebook":"plot"} for the truth of the case, timeline, clues, secrets and what unlocks them.
-Rules: no duplicates (the same fact in other words is a duplicate); prefer lorebooks for secrets a card character holds, so they can be private to that character; cover every entity and the full truth; 30-150 facts. Ids are f1, f2, … in order.
+Coverage (this registry is the narrator's only source; what is missing here does not exist in play):
+- every location: what it looks, sounds and smells like, who is usually there, what happens there, what can be found or learned there;
+- every character: goals, relationships, what they know, what they hide, how they behave with strangers;
+- every organization and item: what it is, who controls it, why it matters;
+- the world: how the supernatural works day to day, institutions, customs, prejudices, prices and dangers that colour scenes;
+- the truth: the full timeline, the method, the motive, and what physical and testimonial traces each event left.
+Perspectives: give every card character at least ${scaleTargets(r).perspectivesPerCard} beliefs or claims of their own (alibis, half-truths, lies, wrong guesses about others), linked with contradicts when they are false. Minor characters should have them too where they matter. Mysteries live on what people say versus what is true.
+Rules: no duplicates (the same fact in other words is a duplicate); prefer lorebooks for secrets a card character holds, so they can be private to that character; write ${scaleTargets(r).facts[0]}-${scaleTargets(r).facts[1]} facts, each a concrete, specific sentence. Ids are f1, f2, … in order.
 
 ${brief(r)}
 
@@ -170,11 +180,12 @@ Activation (decide for each entry: when should the narrator see this?):
 - matchWholeWords: true for short keys (5 letters or fewer).
 - privateTo: card keys whose replies may see the entry (secrets a card character holds, their beliefs and claims). Card keys: ${cards.map((c) => `${c.key} (${c.name})`).join(", ")}.
 - order: lower loads first under budget pressure; 10-50 for facts the plot hinges on, default 100.
-- sticky 2-4 for facts that should linger a few turns after they come up; delay only for content that must not surface early.
+- sticky: null by default. Use 2-4 only for the few entries that must stay in view for several turns once triggered (a scene the player is inside, a discovery being examined). At most one entry in four may be sticky; keyword matches already re-fire whenever the subject is mentioned.
+- delay only for content that must not surface early.
 - recursion: true only when the entry should pull in related entries it names; never on hub entries.
 - description: one plain sentence summarizing the entry (used by a router agent; may be spoiler-bearing, it is hidden).
 - Keys and names are visible in Marinara's editor; entry names may be plain ("Harbor office", "Alibi of …").
-Content is written as plain facts for the narrator, concise.${
+Content: write for the narrator who must play scenes from it. Each non-constant entry is ${scaleTargets(r).entryWords}-200 words of concrete detail: what is seen and heard, how people act, what can be learned and under which conditions, how it connects to other subjects. Plain prose, no headings. A one-line entry is too thin to play. Prefer one rich entry per subject over many fragments; split only when parts need different keys or privacy.${
     lorebook === "plot" && clues
       ? `\nAlso render the clue map: for each clue an entry (or a group in one entry) keyed on the place or person where it is found, saying what can be found and how. Keep red herrings with their innocent explanation.`
       : ""

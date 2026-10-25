@@ -21,6 +21,7 @@ import {
 } from "./schemas.ts";
 import { cardPrompt, cluesPrompt, factsPrompt, lorebookPrompt, openingPrompt, personaPrompt, planPrompt } from "./prompts.ts";
 import type { z } from "zod";
+import { scaleTargets, wordCount } from "./scale.ts";
 
 export interface StageContext {
   projectId: string;
@@ -57,8 +58,15 @@ function llmStage<S extends z.ZodType>(
 
 // ── Code checks (spec §12: structure is checked by code) ──
 
-export function checkPlan(plan: Plan, maxCards: number): string[] {
+export function checkPlan(plan: Plan, requirements: Requirements): string[] {
+  const maxCards = requirements.maxNpcCards;
+  const t = scaleTargets(requirements);
   const problems: string[] = [];
+  const locations = plan.entities.filter((e) => e.type === "location").length;
+  const minor = plan.entities.filter((e) => e.type === "character" && !e.isCard).length;
+  if (plan.entities.length < t.entities) problems.push(`only ${plan.entities.length} entities; a ${requirements.scale.length} adventure needs at least ${t.entities}`);
+  if (locations < t.locations) problems.push(`only ${locations} locations; add at least ${t.locations - locations} more`);
+  if (minor < t.minorCharacters) problems.push(`only ${minor} minor characters without cards; add at least ${t.minorCharacters - minor} more`);
   const keys = new Set<string>();
   for (const e of plan.entities) {
     if (keys.has(e.key)) problems.push(`entity key "${e.key}" is used twice`);
@@ -73,8 +81,17 @@ export function checkPlan(plan: Plan, maxCards: number): string[] {
   return problems;
 }
 
-export function checkFacts(facts: Facts, plan: Plan): string[] {
+export function checkFacts(facts: Facts, plan: Plan, requirements: Requirements): string[] {
+  const t = scaleTargets(requirements);
   const problems: string[] = [];
+  const n = facts.facts.length;
+  if (n < t.facts[0]) problems.push(`only ${n} facts; a ${requirements.scale.length} adventure needs ${t.facts[0]}-${t.facts[1]} (cover places, people, the world and the truth in concrete detail)`);
+  for (const card of plan.entities.filter((e) => e.isCard)) {
+    const own = facts.facts.filter((f) => f.holder === card.key && (f.layer === "belief" || f.layer === "claim")).length;
+    if (own < t.perspectivesPerCard) {
+      problems.push(`card character "${card.key}" holds ${own} beliefs/claims; give them at least ${t.perspectivesPerCard} (alibis, half-truths, lies, wrong guesses)`);
+    }
+  }
   const entities = new Set(plan.entities.map((e) => e.key));
   const cards = new Set(plan.entities.filter((e) => e.isCard).map((e) => e.key));
   const ids = new Set<string>();
@@ -112,8 +129,18 @@ export function checkClues(clues: Clues, plan: Plan, facts: Facts): string[] {
   return problems;
 }
 
-export function checkLorebook(out: LorebookOutput, expectedFacts: string[], cardKeys: Set<string>): string[] {
+export function checkLorebook(out: LorebookOutput, expectedFacts: string[], cardKeys: Set<string>, requirements: Requirements): string[] {
+  const t = scaleTargets(requirements);
   const problems: string[] = [];
+  const keyed = out.entries.filter((e) => e.type !== "constant");
+  const thin = keyed.filter((e) => wordCount(e.content) < t.entryWords);
+  if (thin.length > 0) {
+    problems.push(`${thin.length} entries are under ${t.entryWords} words (${thin.map((e) => e.key).join(", ")}); expand them with concrete, playable detail`);
+  }
+  const sticky = out.entries.filter((e) => (e.sticky ?? 0) > 0);
+  if (sticky.length > Math.max(1, Math.floor(out.entries.length / 4))) {
+    problems.push(`${sticky.length} of ${out.entries.length} entries are sticky; keep sticky only on the few entries that must stay in view (at most one in four)`);
+  }
   const covered = new Set(out.entries.flatMap((e) => e.factIds));
   const missing = expectedFacts.filter((id) => !covered.has(id));
   if (missing.length) problems.push(`facts not rendered into any entry: ${missing.join(", ")}`);
@@ -139,7 +166,7 @@ export function buildStages(requirements: Requirements, plan: Plan | null): Stag
       id: "plan",
       label: "Truth, cast and world plan",
       deps: [],
-      run: (ctx) => llmStage(ctx, "plan", planSchema, planPrompt(ctx.requirements), (p) => checkPlan(p, ctx.requirements.maxNpcCards)),
+      run: (ctx) => llmStage(ctx, "plan", planSchema, planPrompt(ctx.requirements), (p) => checkPlan(p, ctx.requirements)),
       summary: (o) => {
         const p = o as Plan;
         return `${plural(p.entities.filter((e) => e.isCard).length, "card character")}, ${plural(p.entities.length, "entity")}`;
@@ -157,7 +184,7 @@ export function buildStages(requirements: Requirements, plan: Plan | null): Stag
     deps: ["plan"],
     run: (ctx) => {
       const p = ctx.output<Plan>("plan");
-      return llmStage(ctx, "facts", factsSchema, factsPrompt(ctx.requirements, p), (f) => checkFacts(f, p));
+      return llmStage(ctx, "facts", factsSchema, factsPrompt(ctx.requirements, p), (f) => checkFacts(f, p, ctx.requirements));
     },
     summary: (o) => plural((o as Facts).facts.length, "fact"),
   });
@@ -214,7 +241,7 @@ export function buildStages(requirements: Requirements, plan: Plan | null): Stag
         if (facts.length === 0) return { entries: [] } satisfies LorebookOutput;
         const clues = lb === "plot" && ctx.has("clues") ? ctx.output<Clues>("clues") : null;
         return llmStage(ctx, `lorebook:${lb}`, lorebookOutputSchema, lorebookPrompt(ctx.requirements, p, lb, facts, clues), (o) =>
-          checkLorebook(o, facts.map((f) => f.id), cardKeys),
+          checkLorebook(o, facts.map((f) => f.id), cardKeys, ctx.requirements),
         );
       },
       summary: (o) => plural((o as LorebookOutput).entries.length, "entry"),

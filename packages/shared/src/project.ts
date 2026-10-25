@@ -26,6 +26,8 @@ export interface StageView {
   /** Hidden-content detail of a failure; present only when "Show spoilers" is on. */
   errorDetail?: string | null;
   attempts: number;
+  /** Model requests in the latest run of this stage, repairs included. */
+  calls: number;
   finishedAt: string | null;
 }
 

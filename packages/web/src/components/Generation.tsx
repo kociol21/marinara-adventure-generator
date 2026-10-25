@@ -76,6 +76,7 @@ export function Generation({ projectId }: { projectId: string }) {
             <span className="stage-label">{st.label}</span>
             <span className="muted small">
               {st.status === "done" && st.summary}
+              {st.status === "done" && st.calls > 1 && ` · ${st.calls} requests (${st.calls - 1} ${st.calls === 2 ? "fix" : "fixes"})`}
               {st.status === "stale" && "out of date, will be regenerated"}
               {st.status === "running" && "working…"}
             </span>

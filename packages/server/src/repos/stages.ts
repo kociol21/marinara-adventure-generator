@@ -82,6 +82,20 @@ export function createStagesRepo(db: Db) {
       db.prepare(`DELETE FROM stage_run WHERE project_id = ? AND stage NOT IN (${placeholders})`).run(projectId, ...keep);
     },
 
+    /** Model calls made by each stage's latest run (repairs included). */
+    callCounts(projectId: string): Map<string, number> {
+      const rows = db
+        .prepare(`
+          SELECT s.stage AS stage, COUNT(c.id) AS calls
+          FROM stage_run s
+          LEFT JOIN llm_call c ON c.project_id = s.project_id AND c.purpose = s.stage AND c.created_at >= s.started_at
+          WHERE s.project_id = ?
+          GROUP BY s.stage
+        `)
+        .all(projectId) as Array<{ stage: string; calls: number }>;
+      return new Map(rows.map((r) => [r.stage, r.calls]));
+    },
+
     /** After a crash or restart nothing is running any more. */
     resetRunning(): void {
       db.prepare("UPDATE stage_run SET status = 'failed', error = 'Interrupted (the app stopped). Resume to continue.' WHERE status = 'running'").run();

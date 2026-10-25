@@ -70,6 +70,7 @@ export function createPipeline(deps: Deps) {
     }
     const hashBase = sha(current.requirements);
     const defs = definitions(current.requirements, rows);
+    const calls = deps.stages.callCounts(projectId);
     const stages: StageView[] = defs.map((def) => {
       const row = rows.get(def.id);
       const stale = row?.status === "done" && !isCurrent(def, hashBase, project.title, rows);
@@ -81,6 +82,7 @@ export function createPipeline(deps: Deps) {
         error: row?.status === "failed" ? row.error : null,
         ...(showSpoilers && row?.errorDetail ? { errorDetail: row.errorDetail } : {}),
         attempts: row?.attempts ?? 0,
+        calls: calls.get(def.id) ?? 0,
         finishedAt: row?.finishedAt ?? null,
       };
     });

@@ -183,6 +183,20 @@ describe("generation pipeline", () => {
     expect(stageCalls().filter((s) => s === "plan")).toHaveLength(2);
   });
 
+  it("sends a too-thin result back for more material and counts the requests", async () => {
+    const thinWorld = {
+      entries: fixture.lorebooks.world.entries.map((e) => (e.type === "constant" ? e : { ...e, content: "LORE_SHORT", sticky: 3 })),
+    };
+    const { id, stageCalls } = await setup((stage, sub, attempt) =>
+      stage === "lorebook" && sub === "world" && attempt === 1 ? JSON.stringify(thinWorld) : undefined,
+    );
+    const state = await runToEnd(id);
+    expect(state.ready).toBe(true);
+    expect(stageCalls().filter((s) => s === "lorebook:world")).toHaveLength(2);
+    expect(state.stages.find((s) => s.id === "lorebook:world")!.calls).toBe(2);
+    expect(state.stages.find((s) => s.id === "lorebook:plot")!.calls).toBe(1);
+  });
+
   it("reports an interrupted stage after a restart", async () => {
     const { id } = await setup();
     const stages = createStagesRepo(db);

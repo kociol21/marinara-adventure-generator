@@ -5,54 +5,1255 @@
     "truth": {
       "summary": "PLAN_TRUTH_SUMMARY",
       "timeline": [
-        { "when": "Day 1", "what": "PLAN_TIMELINE_1" },
-        { "when": "Day 2", "what": "PLAN_TIMELINE_2" }
+        {
+          "when": "Day 1",
+          "what": "PLAN_TIMELINE_1"
+        },
+        {
+          "when": "Day 2",
+          "what": "PLAN_TIMELINE_2"
+        }
       ],
       "culprit": "gamma",
       "motive": "PLAN_MOTIVE",
       "method": "PLAN_METHOD"
     },
     "entities": [
-      { "key": "alpha", "type": "character", "name": "Probe Alpha", "aliases": ["Alpha"], "publicDescription": "A probe character.", "role": "PLAN_ROLE_ALPHA", "isCard": true },
-      { "key": "beta", "type": "character", "name": "Probe Beta", "aliases": ["Beta"], "publicDescription": "Another probe character.", "role": "PLAN_ROLE_BETA", "isCard": true },
-      { "key": "gamma", "type": "character", "name": "Probe Gamma", "aliases": [], "publicDescription": "A minor probe character.", "role": "PLAN_ROLE_GAMMA", "isCard": false },
-      { "key": "harbor", "type": "location", "name": "Probe Harbor", "aliases": ["the harbor"], "publicDescription": "A probe location.", "role": "", "isCard": false },
-      { "key": "office", "type": "location", "name": "Probe Office", "aliases": [], "publicDescription": "Another probe location.", "role": "", "isCard": false },
-      { "key": "ledger", "type": "item", "name": "Probe Ledger", "aliases": ["the ledger"], "publicDescription": "A probe item.", "role": "PLAN_ROLE_LEDGER", "isCard": false },
-      { "key": "guild", "type": "organization", "name": "Probe Guild", "aliases": [], "publicDescription": "A probe organization.", "role": "", "isCard": false }
+      {
+        "key": "alpha",
+        "type": "character",
+        "name": "Probe Alpha",
+        "aliases": [],
+        "publicDescription": "A probe character.",
+        "role": "PLAN_ROLE_ALPHA",
+        "isCard": true
+      },
+      {
+        "key": "beta",
+        "type": "character",
+        "name": "Probe Beta",
+        "aliases": [],
+        "publicDescription": "A probe character.",
+        "role": "PLAN_ROLE_BETA",
+        "isCard": true
+      },
+      {
+        "key": "gamma",
+        "type": "character",
+        "name": "Probe Gamma",
+        "aliases": [],
+        "publicDescription": "A probe character.",
+        "role": "PLAN_ROLE_GAMMA",
+        "isCard": false
+      },
+      {
+        "key": "delta",
+        "type": "character",
+        "name": "Probe Delta",
+        "aliases": [],
+        "publicDescription": "A probe character.",
+        "role": "PLAN_ROLE_DELTA",
+        "isCard": false
+      },
+      {
+        "key": "epsilon",
+        "type": "character",
+        "name": "Probe Epsilon",
+        "aliases": [],
+        "publicDescription": "A probe character.",
+        "role": "PLAN_ROLE_EPSILON",
+        "isCard": false
+      },
+      {
+        "key": "harbor",
+        "type": "location",
+        "name": "Probe Harbor",
+        "aliases": [],
+        "publicDescription": "A probe location.",
+        "role": "PLAN_ROLE_HARBOR",
+        "isCard": false
+      },
+      {
+        "key": "office",
+        "type": "location",
+        "name": "Probe Office",
+        "aliases": [],
+        "publicDescription": "A probe location.",
+        "role": "PLAN_ROLE_OFFICE",
+        "isCard": false
+      },
+      {
+        "key": "warehouse",
+        "type": "location",
+        "name": "Probe Warehouse",
+        "aliases": [],
+        "publicDescription": "A probe location.",
+        "role": "PLAN_ROLE_WAREHOUSE",
+        "isCard": false
+      },
+      {
+        "key": "tavern",
+        "type": "location",
+        "name": "Probe Tavern",
+        "aliases": [],
+        "publicDescription": "A probe location.",
+        "role": "PLAN_ROLE_TAVERN",
+        "isCard": false
+      },
+      {
+        "key": "ledger",
+        "type": "item",
+        "name": "Probe Ledger",
+        "aliases": [],
+        "publicDescription": "A probe item.",
+        "role": "PLAN_ROLE_LEDGER",
+        "isCard": false
+      },
+      {
+        "key": "lantern",
+        "type": "item",
+        "name": "Probe Lantern",
+        "aliases": [],
+        "publicDescription": "A probe item.",
+        "role": "PLAN_ROLE_LANTERN",
+        "isCard": false
+      },
+      {
+        "key": "guild",
+        "type": "organization",
+        "name": "Probe Guild",
+        "aliases": [],
+        "publicDescription": "A probe organization.",
+        "role": "PLAN_ROLE_GUILD",
+        "isCard": false
+      },
+      {
+        "key": "wards",
+        "type": "concept",
+        "name": "Probe Wards",
+        "aliases": [],
+        "publicDescription": "A probe concept.",
+        "role": "PLAN_ROLE_WARDS",
+        "isCard": false
+      },
+      {
+        "key": "tides",
+        "type": "concept",
+        "name": "Probe Tides",
+        "aliases": [],
+        "publicDescription": "A probe concept.",
+        "role": "PLAN_ROLE_TIDES",
+        "isCard": false
+      }
     ],
-    "threads": [{ "key": "ledger-thread", "name": "Ledger", "description": "PLAN_THREAD" }],
+    "threads": [
+      {
+        "key": "ledger-thread",
+        "name": "Ledger",
+        "description": "PLAN_THREAD"
+      }
+    ],
     "openingCardKey": "alpha"
   },
   "facts": {
     "facts": [
-      { "id": "f1", "subject": "harbor", "statement": "FACT_HARBOR", "layer": "public", "holder": null, "contradicts": null, "secrecy": "public", "home": { "kind": "lorebook", "lorebook": "world" } },
-      { "id": "f2", "subject": "office", "statement": "FACT_OFFICE", "layer": "public", "holder": null, "contradicts": null, "secrecy": "public", "home": { "kind": "lorebook", "lorebook": "world" } },
-      { "id": "f3", "subject": "guild", "statement": "FACT_GUILD", "layer": "public", "holder": null, "contradicts": null, "secrecy": "public", "home": { "kind": "lorebook", "lorebook": "world" } },
-      { "id": "f4", "subject": "ledger", "statement": "FACT_LEDGER_TRUTH", "layer": "truth", "holder": null, "contradicts": null, "secrecy": "secret", "home": { "kind": "lorebook", "lorebook": "plot" } },
-      { "id": "f5", "subject": "gamma", "statement": "FACT_GAMMA", "layer": "truth", "holder": null, "contradicts": null, "secrecy": "hidden", "home": { "kind": "lorebook", "lorebook": "characters" } },
-      { "id": "f6", "subject": "ledger", "statement": "FACT_BETA_BELIEF", "layer": "belief", "holder": "beta", "contradicts": null, "secrecy": "hidden", "home": { "kind": "lorebook", "lorebook": "plot" } },
-      { "id": "f7", "subject": "ledger", "statement": "FACT_ALPHA_CLAIM", "layer": "claim", "holder": "alpha", "contradicts": "f4", "secrecy": "hidden", "home": { "kind": "lorebook", "lorebook": "plot" } },
-      { "id": "f8", "subject": "alpha", "statement": "FACT_ALPHA_IDENTITY", "layer": "truth", "holder": null, "contradicts": null, "secrecy": "public", "home": { "kind": "card", "card": "alpha", "field": "description" } },
-      { "id": "f9", "subject": "alpha", "statement": "FACT_ALPHA_TEMPER", "layer": "truth", "holder": null, "contradicts": null, "secrecy": "public", "home": { "kind": "card", "card": "alpha", "field": "personality" } },
-      { "id": "f10", "subject": "beta", "statement": "FACT_BETA_PAST", "layer": "truth", "holder": null, "contradicts": null, "secrecy": "hidden", "home": { "kind": "card", "card": "beta", "field": "backstory" } },
-      { "id": "f11", "subject": "beta", "statement": "FACT_BETA_LOOK", "layer": "public", "holder": null, "contradicts": null, "secrecy": "public", "home": { "kind": "card", "card": "beta", "field": "appearance" } },
-      { "id": "f12", "subject": "harbor", "statement": "FACT_PREMISE", "layer": "public", "holder": null, "contradicts": null, "secrecy": "public", "home": { "kind": "lorebook", "lorebook": "world" } }
+      {
+        "id": "f1",
+        "subject": "alpha",
+        "statement": "FACT_ALPHA_1",
+        "layer": "truth",
+        "holder": null,
+        "contradicts": null,
+        "secrecy": "public",
+        "home": {
+          "kind": "card",
+          "card": "alpha",
+          "field": "description"
+        }
+      },
+      {
+        "id": "f2",
+        "subject": "alpha",
+        "statement": "FACT_ALPHA_2",
+        "layer": "truth",
+        "holder": null,
+        "contradicts": null,
+        "secrecy": "public",
+        "home": {
+          "kind": "card",
+          "card": "alpha",
+          "field": "personality"
+        }
+      },
+      {
+        "id": "f3",
+        "subject": "alpha",
+        "statement": "FACT_ALPHA_3",
+        "layer": "truth",
+        "holder": null,
+        "contradicts": null,
+        "secrecy": "public",
+        "home": {
+          "kind": "card",
+          "card": "alpha",
+          "field": "appearance"
+        }
+      },
+      {
+        "id": "f4",
+        "subject": "alpha",
+        "statement": "FACT_ALPHA_4",
+        "layer": "truth",
+        "holder": null,
+        "contradicts": null,
+        "secrecy": "public",
+        "home": {
+          "kind": "card",
+          "card": "alpha",
+          "field": "scenario"
+        }
+      },
+      {
+        "id": "f5",
+        "subject": "beta",
+        "statement": "FACT_BETA_5",
+        "layer": "truth",
+        "holder": null,
+        "contradicts": null,
+        "secrecy": "public",
+        "home": {
+          "kind": "card",
+          "card": "beta",
+          "field": "description"
+        }
+      },
+      {
+        "id": "f6",
+        "subject": "beta",
+        "statement": "FACT_BETA_6",
+        "layer": "truth",
+        "holder": null,
+        "contradicts": null,
+        "secrecy": "public",
+        "home": {
+          "kind": "card",
+          "card": "beta",
+          "field": "backstory"
+        }
+      },
+      {
+        "id": "f7",
+        "subject": "beta",
+        "statement": "FACT_BETA_7",
+        "layer": "truth",
+        "holder": null,
+        "contradicts": null,
+        "secrecy": "public",
+        "home": {
+          "kind": "card",
+          "card": "beta",
+          "field": "appearance"
+        }
+      },
+      {
+        "id": "f8",
+        "subject": "beta",
+        "statement": "FACT_BETA_8",
+        "layer": "truth",
+        "holder": null,
+        "contradicts": null,
+        "secrecy": "public",
+        "home": {
+          "kind": "card",
+          "card": "beta",
+          "field": "scenario"
+        }
+      },
+      {
+        "id": "f9",
+        "subject": "gamma",
+        "statement": "FACT_GAMMA_9",
+        "layer": "public",
+        "holder": null,
+        "contradicts": null,
+        "secrecy": "public",
+        "home": {
+          "kind": "lorebook",
+          "lorebook": "characters"
+        }
+      },
+      {
+        "id": "f10",
+        "subject": "gamma",
+        "statement": "FACT_GAMMA_10",
+        "layer": "public",
+        "holder": null,
+        "contradicts": null,
+        "secrecy": "public",
+        "home": {
+          "kind": "lorebook",
+          "lorebook": "characters"
+        }
+      },
+      {
+        "id": "f11",
+        "subject": "gamma",
+        "statement": "FACT_GAMMA_11",
+        "layer": "public",
+        "holder": null,
+        "contradicts": null,
+        "secrecy": "public",
+        "home": {
+          "kind": "lorebook",
+          "lorebook": "characters"
+        }
+      },
+      {
+        "id": "f12",
+        "subject": "gamma",
+        "statement": "FACT_GAMMA_12",
+        "layer": "truth",
+        "holder": null,
+        "contradicts": null,
+        "secrecy": "hidden",
+        "home": {
+          "kind": "lorebook",
+          "lorebook": "characters"
+        }
+      },
+      {
+        "id": "f13",
+        "subject": "gamma",
+        "statement": "FACT_GAMMA_13",
+        "layer": "truth",
+        "holder": null,
+        "contradicts": null,
+        "secrecy": "hidden",
+        "home": {
+          "kind": "lorebook",
+          "lorebook": "characters"
+        }
+      },
+      {
+        "id": "f14",
+        "subject": "delta",
+        "statement": "FACT_DELTA_14",
+        "layer": "public",
+        "holder": null,
+        "contradicts": null,
+        "secrecy": "public",
+        "home": {
+          "kind": "lorebook",
+          "lorebook": "characters"
+        }
+      },
+      {
+        "id": "f15",
+        "subject": "delta",
+        "statement": "FACT_DELTA_15",
+        "layer": "public",
+        "holder": null,
+        "contradicts": null,
+        "secrecy": "public",
+        "home": {
+          "kind": "lorebook",
+          "lorebook": "characters"
+        }
+      },
+      {
+        "id": "f16",
+        "subject": "delta",
+        "statement": "FACT_DELTA_16",
+        "layer": "public",
+        "holder": null,
+        "contradicts": null,
+        "secrecy": "public",
+        "home": {
+          "kind": "lorebook",
+          "lorebook": "characters"
+        }
+      },
+      {
+        "id": "f17",
+        "subject": "delta",
+        "statement": "FACT_DELTA_17",
+        "layer": "truth",
+        "holder": null,
+        "contradicts": null,
+        "secrecy": "hidden",
+        "home": {
+          "kind": "lorebook",
+          "lorebook": "characters"
+        }
+      },
+      {
+        "id": "f18",
+        "subject": "delta",
+        "statement": "FACT_DELTA_18",
+        "layer": "truth",
+        "holder": null,
+        "contradicts": null,
+        "secrecy": "hidden",
+        "home": {
+          "kind": "lorebook",
+          "lorebook": "characters"
+        }
+      },
+      {
+        "id": "f19",
+        "subject": "epsilon",
+        "statement": "FACT_EPSILON_19",
+        "layer": "public",
+        "holder": null,
+        "contradicts": null,
+        "secrecy": "public",
+        "home": {
+          "kind": "lorebook",
+          "lorebook": "characters"
+        }
+      },
+      {
+        "id": "f20",
+        "subject": "epsilon",
+        "statement": "FACT_EPSILON_20",
+        "layer": "public",
+        "holder": null,
+        "contradicts": null,
+        "secrecy": "public",
+        "home": {
+          "kind": "lorebook",
+          "lorebook": "characters"
+        }
+      },
+      {
+        "id": "f21",
+        "subject": "epsilon",
+        "statement": "FACT_EPSILON_21",
+        "layer": "public",
+        "holder": null,
+        "contradicts": null,
+        "secrecy": "public",
+        "home": {
+          "kind": "lorebook",
+          "lorebook": "characters"
+        }
+      },
+      {
+        "id": "f22",
+        "subject": "epsilon",
+        "statement": "FACT_EPSILON_22",
+        "layer": "truth",
+        "holder": null,
+        "contradicts": null,
+        "secrecy": "hidden",
+        "home": {
+          "kind": "lorebook",
+          "lorebook": "characters"
+        }
+      },
+      {
+        "id": "f23",
+        "subject": "epsilon",
+        "statement": "FACT_EPSILON_23",
+        "layer": "truth",
+        "holder": null,
+        "contradicts": null,
+        "secrecy": "hidden",
+        "home": {
+          "kind": "lorebook",
+          "lorebook": "characters"
+        }
+      },
+      {
+        "id": "f24",
+        "subject": "harbor",
+        "statement": "FACT_HARBOR_24",
+        "layer": "public",
+        "holder": null,
+        "contradicts": null,
+        "secrecy": "public",
+        "home": {
+          "kind": "lorebook",
+          "lorebook": "world"
+        }
+      },
+      {
+        "id": "f25",
+        "subject": "harbor",
+        "statement": "FACT_HARBOR_25",
+        "layer": "public",
+        "holder": null,
+        "contradicts": null,
+        "secrecy": "public",
+        "home": {
+          "kind": "lorebook",
+          "lorebook": "world"
+        }
+      },
+      {
+        "id": "f26",
+        "subject": "harbor",
+        "statement": "FACT_HARBOR_26",
+        "layer": "public",
+        "holder": null,
+        "contradicts": null,
+        "secrecy": "public",
+        "home": {
+          "kind": "lorebook",
+          "lorebook": "world"
+        }
+      },
+      {
+        "id": "f27",
+        "subject": "harbor",
+        "statement": "FACT_HARBOR_27",
+        "layer": "truth",
+        "holder": null,
+        "contradicts": null,
+        "secrecy": "hidden",
+        "home": {
+          "kind": "lorebook",
+          "lorebook": "world"
+        }
+      },
+      {
+        "id": "f28",
+        "subject": "harbor",
+        "statement": "FACT_HARBOR_28",
+        "layer": "truth",
+        "holder": null,
+        "contradicts": null,
+        "secrecy": "hidden",
+        "home": {
+          "kind": "lorebook",
+          "lorebook": "world"
+        }
+      },
+      {
+        "id": "f29",
+        "subject": "office",
+        "statement": "FACT_OFFICE_29",
+        "layer": "public",
+        "holder": null,
+        "contradicts": null,
+        "secrecy": "public",
+        "home": {
+          "kind": "lorebook",
+          "lorebook": "world"
+        }
+      },
+      {
+        "id": "f30",
+        "subject": "office",
+        "statement": "FACT_OFFICE_30",
+        "layer": "public",
+        "holder": null,
+        "contradicts": null,
+        "secrecy": "public",
+        "home": {
+          "kind": "lorebook",
+          "lorebook": "world"
+        }
+      },
+      {
+        "id": "f31",
+        "subject": "office",
+        "statement": "FACT_OFFICE_31",
+        "layer": "public",
+        "holder": null,
+        "contradicts": null,
+        "secrecy": "public",
+        "home": {
+          "kind": "lorebook",
+          "lorebook": "world"
+        }
+      },
+      {
+        "id": "f32",
+        "subject": "office",
+        "statement": "FACT_OFFICE_32",
+        "layer": "truth",
+        "holder": null,
+        "contradicts": null,
+        "secrecy": "hidden",
+        "home": {
+          "kind": "lorebook",
+          "lorebook": "world"
+        }
+      },
+      {
+        "id": "f33",
+        "subject": "office",
+        "statement": "FACT_OFFICE_33",
+        "layer": "truth",
+        "holder": null,
+        "contradicts": null,
+        "secrecy": "hidden",
+        "home": {
+          "kind": "lorebook",
+          "lorebook": "world"
+        }
+      },
+      {
+        "id": "f34",
+        "subject": "warehouse",
+        "statement": "FACT_WAREHOUSE_34",
+        "layer": "public",
+        "holder": null,
+        "contradicts": null,
+        "secrecy": "public",
+        "home": {
+          "kind": "lorebook",
+          "lorebook": "world"
+        }
+      },
+      {
+        "id": "f35",
+        "subject": "warehouse",
+        "statement": "FACT_WAREHOUSE_35",
+        "layer": "public",
+        "holder": null,
+        "contradicts": null,
+        "secrecy": "public",
+        "home": {
+          "kind": "lorebook",
+          "lorebook": "world"
+        }
+      },
+      {
+        "id": "f36",
+        "subject": "warehouse",
+        "statement": "FACT_WAREHOUSE_36",
+        "layer": "public",
+        "holder": null,
+        "contradicts": null,
+        "secrecy": "public",
+        "home": {
+          "kind": "lorebook",
+          "lorebook": "world"
+        }
+      },
+      {
+        "id": "f37",
+        "subject": "warehouse",
+        "statement": "FACT_WAREHOUSE_37",
+        "layer": "truth",
+        "holder": null,
+        "contradicts": null,
+        "secrecy": "hidden",
+        "home": {
+          "kind": "lorebook",
+          "lorebook": "world"
+        }
+      },
+      {
+        "id": "f38",
+        "subject": "warehouse",
+        "statement": "FACT_WAREHOUSE_38",
+        "layer": "truth",
+        "holder": null,
+        "contradicts": null,
+        "secrecy": "hidden",
+        "home": {
+          "kind": "lorebook",
+          "lorebook": "world"
+        }
+      },
+      {
+        "id": "f39",
+        "subject": "tavern",
+        "statement": "FACT_TAVERN_39",
+        "layer": "public",
+        "holder": null,
+        "contradicts": null,
+        "secrecy": "public",
+        "home": {
+          "kind": "lorebook",
+          "lorebook": "world"
+        }
+      },
+      {
+        "id": "f40",
+        "subject": "tavern",
+        "statement": "FACT_TAVERN_40",
+        "layer": "public",
+        "holder": null,
+        "contradicts": null,
+        "secrecy": "public",
+        "home": {
+          "kind": "lorebook",
+          "lorebook": "world"
+        }
+      },
+      {
+        "id": "f41",
+        "subject": "tavern",
+        "statement": "FACT_TAVERN_41",
+        "layer": "public",
+        "holder": null,
+        "contradicts": null,
+        "secrecy": "public",
+        "home": {
+          "kind": "lorebook",
+          "lorebook": "world"
+        }
+      },
+      {
+        "id": "f42",
+        "subject": "tavern",
+        "statement": "FACT_TAVERN_42",
+        "layer": "truth",
+        "holder": null,
+        "contradicts": null,
+        "secrecy": "hidden",
+        "home": {
+          "kind": "lorebook",
+          "lorebook": "world"
+        }
+      },
+      {
+        "id": "f43",
+        "subject": "tavern",
+        "statement": "FACT_TAVERN_43",
+        "layer": "truth",
+        "holder": null,
+        "contradicts": null,
+        "secrecy": "hidden",
+        "home": {
+          "kind": "lorebook",
+          "lorebook": "world"
+        }
+      },
+      {
+        "id": "f44",
+        "subject": "ledger",
+        "statement": "FACT_LEDGER_44",
+        "layer": "public",
+        "holder": null,
+        "contradicts": null,
+        "secrecy": "public",
+        "home": {
+          "kind": "lorebook",
+          "lorebook": "plot"
+        }
+      },
+      {
+        "id": "f45",
+        "subject": "ledger",
+        "statement": "FACT_LEDGER_45",
+        "layer": "public",
+        "holder": null,
+        "contradicts": null,
+        "secrecy": "public",
+        "home": {
+          "kind": "lorebook",
+          "lorebook": "plot"
+        }
+      },
+      {
+        "id": "f46",
+        "subject": "ledger",
+        "statement": "FACT_LEDGER_46",
+        "layer": "public",
+        "holder": null,
+        "contradicts": null,
+        "secrecy": "public",
+        "home": {
+          "kind": "lorebook",
+          "lorebook": "plot"
+        }
+      },
+      {
+        "id": "f47",
+        "subject": "ledger",
+        "statement": "FACT_LEDGER_47",
+        "layer": "truth",
+        "holder": null,
+        "contradicts": null,
+        "secrecy": "hidden",
+        "home": {
+          "kind": "lorebook",
+          "lorebook": "plot"
+        }
+      },
+      {
+        "id": "f48",
+        "subject": "ledger",
+        "statement": "FACT_LEDGER_48",
+        "layer": "truth",
+        "holder": null,
+        "contradicts": null,
+        "secrecy": "hidden",
+        "home": {
+          "kind": "lorebook",
+          "lorebook": "plot"
+        }
+      },
+      {
+        "id": "f49",
+        "subject": "lantern",
+        "statement": "FACT_LANTERN_49",
+        "layer": "public",
+        "holder": null,
+        "contradicts": null,
+        "secrecy": "public",
+        "home": {
+          "kind": "lorebook",
+          "lorebook": "plot"
+        }
+      },
+      {
+        "id": "f50",
+        "subject": "lantern",
+        "statement": "FACT_LANTERN_50",
+        "layer": "public",
+        "holder": null,
+        "contradicts": null,
+        "secrecy": "public",
+        "home": {
+          "kind": "lorebook",
+          "lorebook": "plot"
+        }
+      },
+      {
+        "id": "f51",
+        "subject": "lantern",
+        "statement": "FACT_LANTERN_51",
+        "layer": "public",
+        "holder": null,
+        "contradicts": null,
+        "secrecy": "public",
+        "home": {
+          "kind": "lorebook",
+          "lorebook": "plot"
+        }
+      },
+      {
+        "id": "f52",
+        "subject": "lantern",
+        "statement": "FACT_LANTERN_52",
+        "layer": "truth",
+        "holder": null,
+        "contradicts": null,
+        "secrecy": "hidden",
+        "home": {
+          "kind": "lorebook",
+          "lorebook": "plot"
+        }
+      },
+      {
+        "id": "f53",
+        "subject": "lantern",
+        "statement": "FACT_LANTERN_53",
+        "layer": "truth",
+        "holder": null,
+        "contradicts": null,
+        "secrecy": "hidden",
+        "home": {
+          "kind": "lorebook",
+          "lorebook": "plot"
+        }
+      },
+      {
+        "id": "f54",
+        "subject": "guild",
+        "statement": "FACT_GUILD_54",
+        "layer": "public",
+        "holder": null,
+        "contradicts": null,
+        "secrecy": "public",
+        "home": {
+          "kind": "lorebook",
+          "lorebook": "world"
+        }
+      },
+      {
+        "id": "f55",
+        "subject": "guild",
+        "statement": "FACT_GUILD_55",
+        "layer": "public",
+        "holder": null,
+        "contradicts": null,
+        "secrecy": "public",
+        "home": {
+          "kind": "lorebook",
+          "lorebook": "world"
+        }
+      },
+      {
+        "id": "f56",
+        "subject": "guild",
+        "statement": "FACT_GUILD_56",
+        "layer": "public",
+        "holder": null,
+        "contradicts": null,
+        "secrecy": "public",
+        "home": {
+          "kind": "lorebook",
+          "lorebook": "world"
+        }
+      },
+      {
+        "id": "f57",
+        "subject": "guild",
+        "statement": "FACT_GUILD_57",
+        "layer": "truth",
+        "holder": null,
+        "contradicts": null,
+        "secrecy": "hidden",
+        "home": {
+          "kind": "lorebook",
+          "lorebook": "world"
+        }
+      },
+      {
+        "id": "f58",
+        "subject": "guild",
+        "statement": "FACT_GUILD_58",
+        "layer": "truth",
+        "holder": null,
+        "contradicts": null,
+        "secrecy": "hidden",
+        "home": {
+          "kind": "lorebook",
+          "lorebook": "world"
+        }
+      },
+      {
+        "id": "f59",
+        "subject": "wards",
+        "statement": "FACT_WARDS_59",
+        "layer": "public",
+        "holder": null,
+        "contradicts": null,
+        "secrecy": "public",
+        "home": {
+          "kind": "lorebook",
+          "lorebook": "world"
+        }
+      },
+      {
+        "id": "f60",
+        "subject": "wards",
+        "statement": "FACT_WARDS_60",
+        "layer": "public",
+        "holder": null,
+        "contradicts": null,
+        "secrecy": "public",
+        "home": {
+          "kind": "lorebook",
+          "lorebook": "world"
+        }
+      },
+      {
+        "id": "f61",
+        "subject": "wards",
+        "statement": "FACT_WARDS_61",
+        "layer": "public",
+        "holder": null,
+        "contradicts": null,
+        "secrecy": "public",
+        "home": {
+          "kind": "lorebook",
+          "lorebook": "world"
+        }
+      },
+      {
+        "id": "f62",
+        "subject": "wards",
+        "statement": "FACT_WARDS_62",
+        "layer": "truth",
+        "holder": null,
+        "contradicts": null,
+        "secrecy": "hidden",
+        "home": {
+          "kind": "lorebook",
+          "lorebook": "world"
+        }
+      },
+      {
+        "id": "f63",
+        "subject": "wards",
+        "statement": "FACT_WARDS_63",
+        "layer": "truth",
+        "holder": null,
+        "contradicts": null,
+        "secrecy": "hidden",
+        "home": {
+          "kind": "lorebook",
+          "lorebook": "world"
+        }
+      },
+      {
+        "id": "f64",
+        "subject": "tides",
+        "statement": "FACT_TIDES_64",
+        "layer": "public",
+        "holder": null,
+        "contradicts": null,
+        "secrecy": "public",
+        "home": {
+          "kind": "lorebook",
+          "lorebook": "world"
+        }
+      },
+      {
+        "id": "f65",
+        "subject": "tides",
+        "statement": "FACT_TIDES_65",
+        "layer": "public",
+        "holder": null,
+        "contradicts": null,
+        "secrecy": "public",
+        "home": {
+          "kind": "lorebook",
+          "lorebook": "world"
+        }
+      },
+      {
+        "id": "f66",
+        "subject": "tides",
+        "statement": "FACT_TIDES_66",
+        "layer": "public",
+        "holder": null,
+        "contradicts": null,
+        "secrecy": "public",
+        "home": {
+          "kind": "lorebook",
+          "lorebook": "world"
+        }
+      },
+      {
+        "id": "f67",
+        "subject": "tides",
+        "statement": "FACT_TIDES_67",
+        "layer": "truth",
+        "holder": null,
+        "contradicts": null,
+        "secrecy": "hidden",
+        "home": {
+          "kind": "lorebook",
+          "lorebook": "world"
+        }
+      },
+      {
+        "id": "f68",
+        "subject": "tides",
+        "statement": "FACT_TIDES_68",
+        "layer": "truth",
+        "holder": null,
+        "contradicts": null,
+        "secrecy": "hidden",
+        "home": {
+          "kind": "lorebook",
+          "lorebook": "world"
+        }
+      },
+      {
+        "id": "f69",
+        "subject": "ledger",
+        "statement": "FACT_LEDGER_69",
+        "layer": "truth",
+        "holder": null,
+        "contradicts": null,
+        "secrecy": "secret",
+        "home": {
+          "kind": "lorebook",
+          "lorebook": "plot"
+        }
+      },
+      {
+        "id": "f70",
+        "subject": "ledger",
+        "statement": "FACT_LEDGER_70",
+        "layer": "truth",
+        "holder": null,
+        "contradicts": null,
+        "secrecy": "secret",
+        "home": {
+          "kind": "lorebook",
+          "lorebook": "plot"
+        }
+      },
+      {
+        "id": "f71",
+        "subject": "ledger",
+        "statement": "FACT_LEDGER_71",
+        "layer": "truth",
+        "holder": null,
+        "contradicts": null,
+        "secrecy": "secret",
+        "home": {
+          "kind": "lorebook",
+          "lorebook": "plot"
+        }
+      },
+      {
+        "id": "f72",
+        "subject": "ledger",
+        "statement": "FACT_LEDGER_72",
+        "layer": "truth",
+        "holder": null,
+        "contradicts": null,
+        "secrecy": "secret",
+        "home": {
+          "kind": "lorebook",
+          "lorebook": "plot"
+        }
+      },
+      {
+        "id": "f73",
+        "subject": "ledger",
+        "statement": "FACT_LEDGER_73",
+        "layer": "truth",
+        "holder": null,
+        "contradicts": null,
+        "secrecy": "secret",
+        "home": {
+          "kind": "lorebook",
+          "lorebook": "plot"
+        }
+      },
+      {
+        "id": "f74",
+        "subject": "ledger",
+        "statement": "FACT_LEDGER_74",
+        "layer": "truth",
+        "holder": null,
+        "contradicts": null,
+        "secrecy": "secret",
+        "home": {
+          "kind": "lorebook",
+          "lorebook": "plot"
+        }
+      },
+      {
+        "id": "f75",
+        "subject": "ledger",
+        "statement": "FACT_LEDGER_75",
+        "layer": "claim",
+        "holder": "alpha",
+        "contradicts": "f69",
+        "secrecy": "hidden",
+        "home": {
+          "kind": "lorebook",
+          "lorebook": "plot"
+        }
+      },
+      {
+        "id": "f76",
+        "subject": "ledger",
+        "statement": "FACT_LEDGER_76",
+        "layer": "belief",
+        "holder": "alpha",
+        "contradicts": null,
+        "secrecy": "hidden",
+        "home": {
+          "kind": "lorebook",
+          "lorebook": "plot"
+        }
+      },
+      {
+        "id": "f77",
+        "subject": "ledger",
+        "statement": "FACT_LEDGER_77",
+        "layer": "belief",
+        "holder": "alpha",
+        "contradicts": null,
+        "secrecy": "hidden",
+        "home": {
+          "kind": "lorebook",
+          "lorebook": "plot"
+        }
+      },
+      {
+        "id": "f78",
+        "subject": "ledger",
+        "statement": "FACT_LEDGER_78",
+        "layer": "claim",
+        "holder": "beta",
+        "contradicts": "f69",
+        "secrecy": "hidden",
+        "home": {
+          "kind": "lorebook",
+          "lorebook": "plot"
+        }
+      },
+      {
+        "id": "f79",
+        "subject": "ledger",
+        "statement": "FACT_LEDGER_79",
+        "layer": "belief",
+        "holder": "beta",
+        "contradicts": null,
+        "secrecy": "hidden",
+        "home": {
+          "kind": "lorebook",
+          "lorebook": "plot"
+        }
+      },
+      {
+        "id": "f80",
+        "subject": "ledger",
+        "statement": "FACT_LEDGER_80",
+        "layer": "belief",
+        "holder": "beta",
+        "contradicts": null,
+        "secrecy": "hidden",
+        "home": {
+          "kind": "lorebook",
+          "lorebook": "plot"
+        }
+      }
     ]
   },
   "clues": {
-    "conclusions": [{ "id": "c1", "statement": "CLUE_CONCLUSION", "factIds": ["f4"] }],
-    "clues": [
-      { "id": "k1", "conclusionId": "c1", "where": "harbor", "how": "CLUE_HARBOR", "factId": null },
-      { "id": "k2", "conclusionId": "c1", "where": "office", "how": "CLUE_OFFICE", "factId": null },
-      { "id": "k3", "conclusionId": "c1", "where": "gamma", "how": "CLUE_GAMMA", "factId": "f5" }
+    "conclusions": [
+      {
+        "id": "c1",
+        "statement": "CLUE_CONCLUSION",
+        "factIds": [
+          "f69"
+        ]
+      }
     ],
-    "redHerrings": [{ "id": "h1", "statement": "CLUE_HERRING", "explanation": "CLUE_HERRING_EXPLANATION" }]
+    "clues": [
+      {
+        "id": "k1",
+        "conclusionId": "c1",
+        "where": "harbor",
+        "how": "CLUE_HARBOR",
+        "factId": null
+      },
+      {
+        "id": "k2",
+        "conclusionId": "c1",
+        "where": "office",
+        "how": "CLUE_OFFICE",
+        "factId": null
+      },
+      {
+        "id": "k3",
+        "conclusionId": "c1",
+        "where": "gamma",
+        "how": "CLUE_GAMMA",
+        "factId": null
+      }
+    ],
+    "redHerrings": [
+      {
+        "id": "h1",
+        "statement": "CLUE_HERRING",
+        "explanation": "CLUE_HERRING_EXPLANATION"
+      }
+    ]
   },
   "cards": {
     "alpha": {
       "name": "Probe Alpha",
-      "tags": ["probe"],
+      "tags": [
+        "probe"
+      ],
       "description": "CARD_ALPHA_DESCRIPTION",
       "personality": "CARD_ALPHA_PERSONALITY",
       "backstory": "CARD_ALPHA_BACKSTORY",
@@ -64,7 +1265,9 @@
     },
     "beta": {
       "name": "Probe Beta",
-      "tags": ["probe"],
+      "tags": [
+        "probe"
+      ],
       "description": "CARD_BETA_DESCRIPTION",
       "personality": "CARD_BETA_PERSONALITY",
       "backstory": "CARD_BETA_BACKSTORY",
@@ -76,7 +1279,9 @@
   },
   "persona": {
     "name": "Probe Investigator",
-    "tags": ["probe"],
+    "tags": [
+      "probe"
+    ],
     "description": "PERSONA_DESCRIPTION",
     "personality": "PERSONA_PERSONALITY",
     "backstory": "PERSONA_BACKSTORY",
@@ -87,20 +1292,255 @@
   "lorebooks": {
     "world": {
       "entries": [
-        { "key": "premise", "name": "Premise", "content": "LORE_PREMISE", "type": "constant", "order": 10, "factIds": ["f12"] },
-        { "key": "harbor", "name": "Harbor", "content": "LORE_HARBOR", "keys": ["Probe Harbor", "the harbor"], "factIds": ["f1"] },
-        { "key": "office", "name": "Office", "content": "LORE_OFFICE", "keys": ["Probe Office"], "factIds": ["f2"] },
-        { "key": "guild", "name": "Guild", "content": "LORE_GUILD", "keys": ["Probe Guild", "the guild"], "factIds": ["f3"] }
+        {
+          "key": "premise",
+          "name": "Premise",
+          "content": "LORE_PREMISE",
+          "type": "constant",
+          "order": 10,
+          "factIds": []
+        },
+        {
+          "key": "harbor",
+          "name": "Probe Harbor",
+          "content": "LORE_HARBOR probe0 probe1 probe2 probe3 probe4 probe5 probe6 probe0 probe1 probe2 probe3 probe4 probe5 probe6 probe0 probe1 probe2 probe3 probe4 probe5 probe6 probe0 probe1 probe2 probe3 probe4 probe5 probe6 probe0 probe1 probe2 probe3 probe4 probe5 probe6 probe0 probe1 probe2 probe3 probe4 probe5 probe6 probe0 probe1 probe2 probe3 probe4 probe5 probe6 probe0 probe1 probe2 probe3 probe4 probe5 probe6 probe0 probe1 probe2 probe3.",
+          "keys": [
+            "Probe Harbor",
+            "the harbor"
+          ],
+          "factIds": [
+            "f24",
+            "f25",
+            "f26",
+            "f27",
+            "f28"
+          ]
+        },
+        {
+          "key": "office",
+          "name": "Probe Office",
+          "content": "LORE_OFFICE probe0 probe1 probe2 probe3 probe4 probe5 probe6 probe0 probe1 probe2 probe3 probe4 probe5 probe6 probe0 probe1 probe2 probe3 probe4 probe5 probe6 probe0 probe1 probe2 probe3 probe4 probe5 probe6 probe0 probe1 probe2 probe3 probe4 probe5 probe6 probe0 probe1 probe2 probe3 probe4 probe5 probe6 probe0 probe1 probe2 probe3 probe4 probe5 probe6 probe0 probe1 probe2 probe3 probe4 probe5 probe6 probe0 probe1 probe2 probe3.",
+          "keys": [
+            "Probe Office",
+            "the office"
+          ],
+          "factIds": [
+            "f29",
+            "f30",
+            "f31",
+            "f32",
+            "f33"
+          ]
+        },
+        {
+          "key": "warehouse",
+          "name": "Probe Warehouse",
+          "content": "LORE_WAREHOUSE probe0 probe1 probe2 probe3 probe4 probe5 probe6 probe0 probe1 probe2 probe3 probe4 probe5 probe6 probe0 probe1 probe2 probe3 probe4 probe5 probe6 probe0 probe1 probe2 probe3 probe4 probe5 probe6 probe0 probe1 probe2 probe3 probe4 probe5 probe6 probe0 probe1 probe2 probe3 probe4 probe5 probe6 probe0 probe1 probe2 probe3 probe4 probe5 probe6 probe0 probe1 probe2 probe3 probe4 probe5 probe6 probe0 probe1 probe2 probe3.",
+          "keys": [
+            "Probe Warehouse",
+            "the warehouse"
+          ],
+          "factIds": [
+            "f34",
+            "f35",
+            "f36",
+            "f37",
+            "f38"
+          ]
+        },
+        {
+          "key": "tavern",
+          "name": "Probe Tavern",
+          "content": "LORE_TAVERN probe0 probe1 probe2 probe3 probe4 probe5 probe6 probe0 probe1 probe2 probe3 probe4 probe5 probe6 probe0 probe1 probe2 probe3 probe4 probe5 probe6 probe0 probe1 probe2 probe3 probe4 probe5 probe6 probe0 probe1 probe2 probe3 probe4 probe5 probe6 probe0 probe1 probe2 probe3 probe4 probe5 probe6 probe0 probe1 probe2 probe3 probe4 probe5 probe6 probe0 probe1 probe2 probe3 probe4 probe5 probe6 probe0 probe1 probe2 probe3.",
+          "keys": [
+            "Probe Tavern",
+            "the tavern"
+          ],
+          "factIds": [
+            "f39",
+            "f40",
+            "f41",
+            "f42",
+            "f43"
+          ]
+        },
+        {
+          "key": "guild",
+          "name": "Probe Guild",
+          "content": "LORE_GUILD probe0 probe1 probe2 probe3 probe4 probe5 probe6 probe0 probe1 probe2 probe3 probe4 probe5 probe6 probe0 probe1 probe2 probe3 probe4 probe5 probe6 probe0 probe1 probe2 probe3 probe4 probe5 probe6 probe0 probe1 probe2 probe3 probe4 probe5 probe6 probe0 probe1 probe2 probe3 probe4 probe5 probe6 probe0 probe1 probe2 probe3 probe4 probe5 probe6 probe0 probe1 probe2 probe3 probe4 probe5 probe6 probe0 probe1 probe2 probe3.",
+          "keys": [
+            "Probe Guild",
+            "the guild"
+          ],
+          "factIds": [
+            "f54",
+            "f55",
+            "f56",
+            "f57",
+            "f58"
+          ]
+        },
+        {
+          "key": "wards",
+          "name": "Probe Wards",
+          "content": "LORE_WARDS probe0 probe1 probe2 probe3 probe4 probe5 probe6 probe0 probe1 probe2 probe3 probe4 probe5 probe6 probe0 probe1 probe2 probe3 probe4 probe5 probe6 probe0 probe1 probe2 probe3 probe4 probe5 probe6 probe0 probe1 probe2 probe3 probe4 probe5 probe6 probe0 probe1 probe2 probe3 probe4 probe5 probe6 probe0 probe1 probe2 probe3 probe4 probe5 probe6 probe0 probe1 probe2 probe3 probe4 probe5 probe6 probe0 probe1 probe2 probe3.",
+          "keys": [
+            "Probe Wards",
+            "the wards"
+          ],
+          "factIds": [
+            "f59",
+            "f60",
+            "f61",
+            "f62",
+            "f63"
+          ]
+        },
+        {
+          "key": "tides",
+          "name": "Probe Tides",
+          "content": "LORE_TIDES probe0 probe1 probe2 probe3 probe4 probe5 probe6 probe0 probe1 probe2 probe3 probe4 probe5 probe6 probe0 probe1 probe2 probe3 probe4 probe5 probe6 probe0 probe1 probe2 probe3 probe4 probe5 probe6 probe0 probe1 probe2 probe3 probe4 probe5 probe6 probe0 probe1 probe2 probe3 probe4 probe5 probe6 probe0 probe1 probe2 probe3 probe4 probe5 probe6 probe0 probe1 probe2 probe3 probe4 probe5 probe6 probe0 probe1 probe2 probe3.",
+          "keys": [
+            "Probe Tides",
+            "the tides"
+          ],
+          "factIds": [
+            "f64",
+            "f65",
+            "f66",
+            "f67",
+            "f68"
+          ]
+        }
       ]
     },
     "characters": {
-      "entries": [{ "key": "gamma", "name": "Gamma", "content": "LORE_GAMMA", "keys": ["Probe Gamma", "Gamma"], "matchWholeWords": true, "factIds": ["f5"] }]
+      "entries": [
+        {
+          "key": "gamma",
+          "name": "Probe Gamma",
+          "content": "LORE_GAMMA probe0 probe1 probe2 probe3 probe4 probe5 probe6 probe0 probe1 probe2 probe3 probe4 probe5 probe6 probe0 probe1 probe2 probe3 probe4 probe5 probe6 probe0 probe1 probe2 probe3 probe4 probe5 probe6 probe0 probe1 probe2 probe3 probe4 probe5 probe6 probe0 probe1 probe2 probe3 probe4 probe5 probe6 probe0 probe1 probe2 probe3 probe4 probe5 probe6 probe0 probe1 probe2 probe3 probe4 probe5 probe6 probe0 probe1 probe2 probe3.",
+          "keys": [
+            "Probe Gamma",
+            "the gamma"
+          ],
+          "factIds": [
+            "f9",
+            "f10",
+            "f11",
+            "f12",
+            "f13"
+          ]
+        },
+        {
+          "key": "delta",
+          "name": "Probe Delta",
+          "content": "LORE_DELTA probe0 probe1 probe2 probe3 probe4 probe5 probe6 probe0 probe1 probe2 probe3 probe4 probe5 probe6 probe0 probe1 probe2 probe3 probe4 probe5 probe6 probe0 probe1 probe2 probe3 probe4 probe5 probe6 probe0 probe1 probe2 probe3 probe4 probe5 probe6 probe0 probe1 probe2 probe3 probe4 probe5 probe6 probe0 probe1 probe2 probe3 probe4 probe5 probe6 probe0 probe1 probe2 probe3 probe4 probe5 probe6 probe0 probe1 probe2 probe3.",
+          "keys": [
+            "Probe Delta",
+            "the delta"
+          ],
+          "factIds": [
+            "f14",
+            "f15",
+            "f16",
+            "f17",
+            "f18"
+          ]
+        },
+        {
+          "key": "epsilon",
+          "name": "Probe Epsilon",
+          "content": "LORE_EPSILON probe0 probe1 probe2 probe3 probe4 probe5 probe6 probe0 probe1 probe2 probe3 probe4 probe5 probe6 probe0 probe1 probe2 probe3 probe4 probe5 probe6 probe0 probe1 probe2 probe3 probe4 probe5 probe6 probe0 probe1 probe2 probe3 probe4 probe5 probe6 probe0 probe1 probe2 probe3 probe4 probe5 probe6 probe0 probe1 probe2 probe3 probe4 probe5 probe6 probe0 probe1 probe2 probe3 probe4 probe5 probe6 probe0 probe1 probe2 probe3.",
+          "keys": [
+            "Probe Epsilon",
+            "the epsilon"
+          ],
+          "factIds": [
+            "f19",
+            "f20",
+            "f21",
+            "f22",
+            "f23"
+          ]
+        }
+      ]
     },
     "plot": {
       "entries": [
-        { "key": "ledger-truth", "name": "Ledger truth", "content": "LORE_LEDGER_SECRET", "keys": ["ledger"], "order": 20, "factIds": ["f4"] },
-        { "key": "beta-belief", "name": "Beta belief", "content": "LORE_BETA_BELIEF", "keys": ["ledger"], "privateTo": ["beta"], "factIds": ["f6"] },
-        { "key": "alpha-claim", "name": "Alpha claim", "content": "LORE_ALPHA_CLAIM", "keys": ["ledger", "account book"], "privateTo": ["alpha"], "factIds": ["f7"] }
+        {
+          "key": "ledger",
+          "name": "Probe Ledger",
+          "content": "LORE_LEDGER_SECRET probe0 probe1 probe2 probe3 probe4 probe5 probe6 probe0 probe1 probe2 probe3 probe4 probe5 probe6 probe0 probe1 probe2 probe3 probe4 probe5 probe6 probe0 probe1 probe2 probe3 probe4 probe5 probe6 probe0 probe1 probe2 probe3 probe4 probe5 probe6 probe0 probe1 probe2 probe3 probe4 probe5 probe6 probe0 probe1 probe2 probe3 probe4 probe5 probe6 probe0 probe1 probe2 probe3 probe4 probe5 probe6 probe0 probe1 probe2 probe3.",
+          "keys": [
+            "Probe Ledger",
+            "the ledger"
+          ],
+          "factIds": [
+            "f44",
+            "f45",
+            "f46",
+            "f47",
+            "f48",
+            "f69",
+            "f70",
+            "f71",
+            "f72",
+            "f73",
+            "f74"
+          ],
+          "sticky": 3
+        },
+        {
+          "key": "lantern",
+          "name": "Probe Lantern",
+          "content": "LORE_LANTERN probe0 probe1 probe2 probe3 probe4 probe5 probe6 probe0 probe1 probe2 probe3 probe4 probe5 probe6 probe0 probe1 probe2 probe3 probe4 probe5 probe6 probe0 probe1 probe2 probe3 probe4 probe5 probe6 probe0 probe1 probe2 probe3 probe4 probe5 probe6 probe0 probe1 probe2 probe3 probe4 probe5 probe6 probe0 probe1 probe2 probe3 probe4 probe5 probe6 probe0 probe1 probe2 probe3 probe4 probe5 probe6 probe0 probe1 probe2 probe3.",
+          "keys": [
+            "Probe Lantern",
+            "the lantern"
+          ],
+          "factIds": [
+            "f49",
+            "f50",
+            "f51",
+            "f52",
+            "f53"
+          ]
+        },
+        {
+          "key": "ledger-alpha",
+          "name": "Probe Ledger (alpha)",
+          "content": "LORE_LEDGER-ALPHA probe0 probe1 probe2 probe3 probe4 probe5 probe6 probe0 probe1 probe2 probe3 probe4 probe5 probe6 probe0 probe1 probe2 probe3 probe4 probe5 probe6 probe0 probe1 probe2 probe3 probe4 probe5 probe6 probe0 probe1 probe2 probe3 probe4 probe5 probe6 probe0 probe1 probe2 probe3 probe4 probe5 probe6 probe0 probe1 probe2 probe3 probe4 probe5 probe6 probe0 probe1 probe2 probe3 probe4 probe5 probe6 probe0 probe1 probe2 probe3.",
+          "keys": [
+            "Probe Ledger",
+            "the ledger"
+          ],
+          "privateTo": [
+            "alpha"
+          ],
+          "factIds": [
+            "f75",
+            "f76",
+            "f77"
+          ]
+        },
+        {
+          "key": "ledger-beta",
+          "name": "Probe Ledger (beta)",
+          "content": "LORE_LEDGER-BETA probe0 probe1 probe2 probe3 probe4 probe5 probe6 probe0 probe1 probe2 probe3 probe4 probe5 probe6 probe0 probe1 probe2 probe3 probe4 probe5 probe6 probe0 probe1 probe2 probe3 probe4 probe5 probe6 probe0 probe1 probe2 probe3 probe4 probe5 probe6 probe0 probe1 probe2 probe3 probe4 probe5 probe6 probe0 probe1 probe2 probe3 probe4 probe5 probe6 probe0 probe1 probe2 probe3 probe4 probe5 probe6 probe0 probe1 probe2 probe3.",
+          "keys": [
+            "Probe Ledger",
+            "the ledger"
+          ],
+          "privateTo": [
+            "beta"
+          ],
+          "factIds": [
+            "f78",
+            "f79",
+            "f80"
+          ]
+        }
       ]
     }
   },
@@ -111,7 +1551,11 @@
       "description": "SECRET_PLOT_ARC",
       "protagonistArc": "SECRET_PLOT_PROTAGONIST",
       "characterArc": "SECRET_PLOT_CHARACTER",
-      "sceneDirections": ["SECRET_BEAT_1", "SECRET_BEAT_2", "SECRET_BEAT_3"],
+      "sceneDirections": [
+        "SECRET_BEAT_1",
+        "SECRET_BEAT_2",
+        "SECRET_BEAT_3"
+      ],
       "pacing": "steady"
     }
   }
