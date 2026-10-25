@@ -24,6 +24,12 @@ import {
 const TEXT_TEST_PROMPT = "Reply with exactly one word: ready";
 const IMAGE_TEST_PROMPT = "A small red apple on a plain white table, simple flat illustration";
 
+/**
+ * The ChatGPT catalog only lists models whose `minimal_client_version` is at or below this
+ * (verified 2026-10-25: "0.1.0" returns nothing, Codex 0.x minimums are met by "1.0.0").
+ */
+const CODEX_CLIENT_VERSION = "1.0.0";
+
 export interface ProviderAdapter {
   support(capability: Capability): CatalogSupport;
   /** Reads the provider's model list. Never generates anything. */
@@ -233,11 +239,15 @@ class CodexAdapter implements ProviderAdapter {
     }
     if (capability !== "text") return [];
     const auth = await this.auth.get();
-    const json = await requestJson(this.fetch, joinUrl(CODEX_BASE_URL, "models?client_version=0.1.0"), { headers: codexHeaders(auth) }, {
-      label: `${this.label} model list`,
-    });
+    const json = await requestJson(
+      this.fetch,
+      joinUrl(CODEX_BASE_URL, `models?client_version=${CODEX_CLIENT_VERSION}`),
+      { headers: codexHeaders(auth) },
+      { label: `${this.label} model list` },
+    );
     const models = isRecord(json) && Array.isArray(json.models) ? json.models.filter(isRecord) : [];
     return models
+      .filter((m) => m.visibility !== "hide")
       .map((m) => {
         const id = typeof m.slug === "string" ? m.slug : typeof m.id === "string" ? m.id : null;
         if (!id) return null;

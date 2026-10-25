@@ -73,10 +73,20 @@ Plan awaryjny Nano-GPT 🔎: API zgodne z OpenAI (`https://nano-gpt.com/api/v1`)
 
 **Wniosek:** generator nie powinien sam liczyć embeddingów dla Marinary. Przygotowuje ustawienia, a wektoryzację zleca Marinarze (etap integracji) albo podaje instrukcję w eksporcie. Własne połączenie embeddingowe aplikacji służy do audytu duplikatów znaczeniowych (sekcja 11 specyfikacji). Status w raporcie ma trzy poziomy: *configured* → *vectorized* (przez API) → *verified* (odczyt statusu i test aktywacji).
 
+### 2a. Test na prawdziwym koncie ChatGPT (25 października 2026 r., za zgodą użytkownika, plan Plus)
+
+| Ustalenie | Status |
+|---|---|
+| Katalog `GET …/codex/models` **filtruje modele po `client_version`**. Przy `0.1.0` zwraca pustą listę, a od wersji przekraczającej `minimal_client_version` modeli (0.98–0.155) zwraca 9 pozycji. Aplikacja wysyła `1.0.0`. | ✅ |
+| Katalog zawiera modele wewnętrzne z `visibility: "hide"` (`codex-auto-review`, `gpt-reserve`). Aplikacja je pomija i pokazuje 7 modeli: gpt-5.6-luna/sol/terra, gpt-6-astra/luna/sol, gpt-6.1-sol (kontekst 272k, a gpt-6.1-sol 500k). | ✅ |
+| Test tekstu przez Responses API (`gpt-5.6-luna`, stream, bez parametrów próbkowania): odpowiedź „ready” w 1,2 s. | ✅ |
+| Obraz `gpt-image-2` przez `…/codex/images/generations`: poprawny PNG w 17,6 s, ale **1536×1024 zamiast żądanego 1024×1024**. Endpoint nie trzyma rozmiaru, co potwierdza uwagę z kodu Marinary. Awatary (M6) muszą podawać proporcje w prompcie i przycinać wynik. | ✅ |
+| Token był ważny, więc nie było odświeżenia i `auth.json` pozostał niezmieniony. | ✅ |
+
 ## 5. Co zostało niesprawdzone
 
-1. ❓ Ustrukturyzowane wyjście i narzędzia przez ChatGPT/Codex. Wymaga jednego testowego wywołania, które zużyje limit, więc tylko za twoją zgodą.
-2. ❓ Generowanie obrazu przez Codex z nowej aplikacji. Wiemy, że działa w Marinarze, ale z nowej aplikacji nie było testu z tego samego powodu.
+1. ❓ Ustrukturyzowane wyjście (`json_schema`) i natywne narzędzia przez ChatGPT/Codex. Marinara ich tu nie wysyła. Sprawdzimy to przy M4; do tego czasu pipeline zakłada JSON w tekście z walidacją po naszej stronie.
+2. ✅ Generowanie obrazu przez Codex z nowej aplikacji działa (patrz 2a).
 3. ❓ Czy na VPS jest zainstalowany Narrative Director i jakie są dane logowania do API. Potrzebne dopiero przy integracji.
 4. ❓ Zachowanie filtrów tagów w czatach grupowych z trybem narratora (wszystkie postacie w jednym prompcie). Test na lokalnej instancji podczas M2.
 5. ❓ Koordynacja `first_mes` wielu kart ze wspólnym otwarciem. Czat Roleplay startuje od greetingu jednej karty, więc otwarcie trzeba osadzić w karcie „prowadzącej” albo w osobnej karcie narratora. Do decyzji w M4.

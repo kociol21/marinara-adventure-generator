@@ -118,11 +118,21 @@ describe("model catalogs", () => {
 
   it("lists Codex text models from the ChatGPT catalog and offers gpt-image-2 for images", async () => {
     const { requests } = await setup({
-      "GET chatgpt.com/backend-api/codex/models": () => ({ json: { models: [{ slug: "gpt-5.5", display_name: "GPT-5.5" }] } }),
+      "GET chatgpt.com/backend-api/codex/models": () => ({
+        json: {
+          models: [
+            { slug: "gpt-5.5", display_name: "GPT-5.5", visibility: "list", context_window: 272000 },
+            { slug: "codex-auto-review", display_name: "Codex Auto Review", visibility: "hide" },
+          ],
+        },
+      }),
     });
     const conn = await create({ kind: "codex-chatgpt", name: "ChatGPT" });
     const text = await post(`/api/connections/${conn.id}/models/fetch`, { capability: "text" });
-    expect(text.json().models[0]).toMatchObject({ modelId: "gpt-5.5", billing: "subscription" });
+    expect(text.json().models).toHaveLength(1);
+    expect(text.json().models[0]).toMatchObject({ modelId: "gpt-5.5", billing: "subscription", contextLength: 272000 });
+    // An old client_version makes the catalog come back empty.
+    expect(requests[0]!.url).toContain("client_version=1.0.0");
     expect(requests[0]!.headers).toMatchObject({ authorization: "Bearer codex-token", "chatgpt-account-id": "acct-1" });
 
     const image = await post(`/api/connections/${conn.id}/models/fetch`, { capability: "image" });
