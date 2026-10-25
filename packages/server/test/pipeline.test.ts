@@ -216,6 +216,19 @@ describe("generation pipeline", () => {
     expect(world.entries.filter((e) => e.key === "narrative-voice")).toHaveLength(1);
   });
 
+  it("re-runs only a code stage when its version changes", async () => {
+    const { id, stageCalls } = await setup();
+    await runToEnd(id);
+    // Simulate a project assembled by an older assemble version: its stored input hash no longer matches.
+    db.prepare("UPDATE stage_run SET input_hash = 'old-version' WHERE project_id = ? AND stage = 'assemble'").run(id);
+    const stale = (await app.inject({ method: "GET", url: `/api/projects/${id}/generation`, headers: { host } })).json() as GenerationState;
+    expect(stale.stages.filter((s) => s.status === "stale").map((s) => s.id)).toEqual(["assemble"]);
+    const before = stageCalls().length;
+    const state = await runToEnd(id);
+    expect(state.ready).toBe(true);
+    expect(stageCalls().length).toBe(before);
+  });
+
   it("reports an interrupted stage after a restart", async () => {
     const { id } = await setup();
     const stages = createStagesRepo(db);

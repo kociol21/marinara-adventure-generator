@@ -51,7 +51,15 @@ export function createPipeline(deps: Deps) {
   }
 
   function inputHash(def: StageDef, hashBase: string, title: string, rows: Map<string, StageRow>): string {
-    return sha([PROMPT_VERSION, def.id, hashBase, title, ...def.deps.map((d) => rows.get(d)?.outputHash ?? "missing")]);
+    // The version joins the hash only when set, so existing stage hashes stay valid.
+    return sha([
+      PROMPT_VERSION,
+      def.id,
+      ...(def.version ? [`v${def.version}`] : []),
+      hashBase,
+      title,
+      ...def.deps.map((d) => rows.get(d)?.outputHash ?? "missing"),
+    ]);
   }
 
   /** Done and still valid for the current inputs. */

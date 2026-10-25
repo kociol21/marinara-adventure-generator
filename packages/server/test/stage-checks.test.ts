@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { requirementsSchema } from "@adv/shared";
-import { checkFacts, checkLorebook, checkPlan } from "../src/pipeline/stages.ts";
+import { checkFacts, checkLorebook, checkPlan, withWholeWordsForShortKeys } from "../src/pipeline/stages.ts";
 import { planSchema, factsSchema, lorebookOutputSchema } from "../src/pipeline/schemas.ts";
 import fixture from "../../../tools/marinara-test/pipeline-fixture.json" with { type: "json" };
 
@@ -8,6 +8,17 @@ const medium = requirementsSchema.parse({ maxNpcCards: 4, scale: { length: "medi
 const plan = planSchema.parse(fixture.plan);
 const facts = factsSchema.parse(fixture.facts);
 const cardKeys = new Set(["alpha", "beta"]);
+
+describe("short keys", () => {
+  const entry = (keys: string[], extra = {}) => ({ keys, secondaryKeys: [], useRegex: false, matchWholeWords: false, ...extra });
+
+  it("get whole-word matching, other entries stay as they are", () => {
+    expect(withWholeWordsForShortKeys(entry(["Rook", "Felix Rook"])).matchWholeWords).toBe(true);
+    expect(withWholeWordsForShortKeys(entry(["the harbor office"], { secondaryKeys: ["dock"] })).matchWholeWords).toBe(true);
+    expect(withWholeWordsForShortKeys(entry(["Brooklyn", "the harbor"])).matchWholeWords).toBe(false);
+    expect(withWholeWordsForShortKeys(entry(["ab?c"], { useRegex: true })).matchWholeWords).toBe(false);
+  });
+});
 
 describe("richness checks", () => {
   it("accept the medium-size fixture", () => {

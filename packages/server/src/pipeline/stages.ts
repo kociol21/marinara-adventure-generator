@@ -39,6 +39,8 @@ export interface StageDef {
   /** Spoiler-free label for the progress view. */
   label: string;
   deps: string[];
+  /** Bump when a code-only stage changes behaviour, so finished projects re-run it. */
+  version?: string;
   run(ctx: StageContext): Promise<unknown>;
   /** Spoiler-free one-line result, e.g. "62 facts". */
   summary(output: unknown): string;
@@ -264,6 +266,8 @@ export function buildStages(requirements: Requirements, plan: Plan | null): Stag
     id: "assemble",
     label: "Assemble and validate the package",
     deps: stages.map((s) => s.id),
+    // 2: whole-word matching for short keys.
+    version: "2",
     run: async (ctx) => assemble(ctx),
     summary: (o) => {
       const issues = (o as AssembleOutput).issues;
@@ -293,6 +297,20 @@ const LOREBOOK_META: Record<LorebookKey, { name: string; category: LorebookDraft
   characters: { name: "Characters", category: "npc", tokenBudget: 2048 },
   plot: { name: "Plot", category: "uncategorized", tokenBudget: 3072 },
 };
+
+/** Keys of this length or less match inside longer words ("Rook" in "Brooklyn") unless whole-word matching is on. */
+export const SHORT_KEY_LENGTH = 5;
+
+/**
+ * Models often skip whole-word matching for short keys such as first names, even when told to
+ * (second real run: 14 of 36 entries). Turning it on is safe here: whole-word matching still
+ * matches multi-word keys, only no longer inside other words. Regex keys are left alone.
+ */
+export function withWholeWordsForShortKeys<E extends { keys: string[]; secondaryKeys: string[]; useRegex: boolean; matchWholeWords: boolean }>(entry: E): E {
+  if (entry.useRegex || entry.matchWholeWords) return entry;
+  const short = [...entry.keys, ...entry.secondaryKeys].some((k) => k.trim().length <= SHORT_KEY_LENGTH);
+  return short ? { ...entry, matchWholeWords: true } : entry;
+}
 
 export function assemble(ctx: StageContext): AssembleOutput {
   const plan = ctx.output<Plan>("plan");
@@ -333,7 +351,7 @@ export function assemble(ctx: StageContext): AssembleOutput {
       name: `${ctx.title}: ${LOREBOOK_META[key].name}`,
       category: LOREBOOK_META[key].category,
       tokenBudget: LOREBOOK_META[key].tokenBudget,
-      entries: out.entries,
+      entries: out.entries.map(withWholeWordsForShortKeys),
     }));
 
   const pkg = adventurePackageSchema.parse({
