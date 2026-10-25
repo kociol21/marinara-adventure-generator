@@ -47,7 +47,20 @@ export function ConnectionCard({ connection }: { connection: Connection }) {
     },
   });
 
-  const remove = useMutation({ mutationFn: () => api.delete(`/connections/${connection.id}`), onSuccess: refresh });
+  const remove = useMutation({
+    mutationFn: () => api.delete(`/connections/${connection.id}`),
+    onSuccess: () => {
+      // Take the card off screen and forget its cached lists before refreshing, or the still-mounted
+      // queries refetch the deleted connection into 404s.
+      const id = connection.id;
+      const mentions = (key: readonly unknown[]) => JSON.stringify(key).includes(id);
+      queryClient.setQueryData<Connection[]>(["connections"], (old) => old?.filter((c) => c.id !== id));
+      queryClient.removeQueries({ predicate: (q) => mentions(q.queryKey) });
+      void queryClient.invalidateQueries({
+        predicate: (q) => !mentions(q.queryKey) && ["connections", "models", "assignments"].includes(String(q.queryKey[0])),
+      });
+    },
+  });
 
   return (
     <article className="panel">

@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-export const projectStatusSchema = z.enum(["draft", "interview", "generating", "ready", "exported"]);
+export const projectStatusSchema = z.enum(["draft", "interview", "approved", "generating", "ready", "exported"]);
 export type ProjectStatus = z.infer<typeof projectStatusSchema>;
 
 export const projectSchema = z.object({

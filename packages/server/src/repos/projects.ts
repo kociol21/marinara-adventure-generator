@@ -58,6 +58,10 @@ export function createProjectsRepo(db: Db) {
       return get(id);
     },
 
+    setStatus(id: string, status: ProjectStatus): void {
+      db.prepare("UPDATE project SET status = ?, updated_at = ? WHERE id = ?").run(status, new Date().toISOString(), id);
+    },
+
     delete(id: string): boolean {
       return db.prepare("DELETE FROM project WHERE id = ?").run(id).changes > 0;
     },

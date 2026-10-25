@@ -291,3 +291,89 @@ button.secondary {
 code {
   font-size: 0.9em;
 }
+
+.fact-row {
+  display: contents;
+}
+
+.chat-log {
+  display: grid;
+  gap: 10px;
+  margin: 12px 0;
+}
+
+.bubble {
+  max-width: 85%;
+  padding: 10px 14px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  white-space: pre-wrap;
+}
+
+.bubble ul {
+  margin: 8px 0 0;
+  padding-left: 20px;
+  white-space: normal;
+}
+
+.bubble-user {
+  justify-self: end;
+  background: color-mix(in srgb, var(--accent) 12%, var(--surface));
+}
+
+.bubble-assistant {
+  justify-self: start;
+}
+
+.composer textarea {
+  width: 100%;
+  font: inherit;
+  padding: 8px 12px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  resize: vertical;
+}
+
+.composer .row {
+  align-items: center;
+  justify-content: space-between;
+}
+
+.composer-note {
+  flex: 1;
+}
+
+.assumptions {
+  margin-top: 12px;
+  padding: 8px 12px;
+  border-left: 3px solid var(--accent);
+  background: color-mix(in srgb, var(--accent) 6%, var(--surface));
+}
+
+.assumptions ul {
+  margin: 4px 0 0;
+  padding-left: 20px;
+}
+
+.badge-approved {
+  color: #2e7d32;
+  border-color: currentColor;
+}
+
+.req-form textarea {
+  font: inherit;
+  padding: 8px 12px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+}
+
+.req-form .row .field {
+  flex: 1;
+  min-width: 140px;
+  margin: 8px 0;
+}

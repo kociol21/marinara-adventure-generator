@@ -53,4 +53,41 @@ export const migrations: string[] = [
     model_id       TEXT NOT NULL
   );
   `,
+  `
+  CREATE TABLE interview_message (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    project_id  TEXT NOT NULL REFERENCES project(id) ON DELETE CASCADE,
+    role        TEXT NOT NULL,
+    content     TEXT NOT NULL,
+    questions   TEXT NOT NULL DEFAULT '[]',
+    created_at  TEXT NOT NULL
+  );
+  CREATE INDEX interview_message_project ON interview_message(project_id, id);
+
+  -- One row per saved version; the newest row is the current draft.
+  CREATE TABLE requirements (
+    project_id    TEXT NOT NULL REFERENCES project(id) ON DELETE CASCADE,
+    version       INTEGER NOT NULL,
+    data          TEXT NOT NULL,
+    assumptions   TEXT NOT NULL DEFAULT '[]',
+    ready         INTEGER NOT NULL DEFAULT 0,
+    approved_at   TEXT,
+    created_at    TEXT NOT NULL,
+    PRIMARY KEY (project_id, version)
+  );
+
+  -- Every model call, for usage display and debugging. No prompts or replies are stored here.
+  CREATE TABLE llm_call (
+    id             INTEGER PRIMARY KEY AUTOINCREMENT,
+    project_id     TEXT,
+    task           TEXT NOT NULL,
+    purpose        TEXT NOT NULL,
+    connection_id  TEXT,
+    model_id       TEXT NOT NULL,
+    ok             INTEGER NOT NULL,
+    latency_ms     INTEGER NOT NULL,
+    error          TEXT,
+    created_at     TEXT NOT NULL
+  );
+  `,
 ];

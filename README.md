@@ -2,7 +2,7 @@
 
 Local web app that prepares complete, spoiler-free adventures (character cards, persona, lorebooks, Secret Plot seed, opening) for [Marinara Engine](https://github.com/Pasta-Devs/Marinara-Engine). See the [specification](Marinara-Adventure-Generator-SPEC.md), [technical verification](docs/01-weryfikacja-techniczna.md) and [architecture plan](docs/02-architektura-i-plan.md).
 
-Status: milestones M0 (app skeleton) and M1 (model connections: ChatGPT via Codex login, NanoGPT, OpenRouter, OpenAI-compatible; separate text, image and embedding model lists; explicit, cost-labelled tests; task assignments) and M2 (Marinara native formats, structural validation, export bundle, offline lorebook activation simulator checked against a real Marinara).
+Status: milestones M0 (app skeleton) and M1 (model connections: ChatGPT via Codex login, NanoGPT, OpenRouter, OpenAI-compatible; separate text, image and embedding model lists; explicit, cost-labelled tests; task assignments) and M2 (Marinara native formats, structural validation, export bundle, offline lorebook activation simulator checked against a real Marinara) and M3 (spoiler-free requirements interview: any-language pitch, short preference questions, visible defaults, editable summary, approval).
 
 ## Requirements
 

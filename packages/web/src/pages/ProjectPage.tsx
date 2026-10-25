@@ -3,6 +3,7 @@ import { useNavigate, useParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { Project } from "@adv/shared";
 import { api } from "../api.ts";
+import { Interview } from "../components/Interview.tsx";
 
 export function ProjectPage() {
   const { id = "" } = useParams();
@@ -53,13 +54,7 @@ export function ProjectPage() {
         <dd>{new Date(project.data.createdAt).toLocaleString()}</dd>
       </dl>
 
-      <div className="placeholder">
-        <h2>Requirements interview</h2>
-        <p className="muted">
-          The spoiler-free interview arrives in milestone M3. You will describe the idea, answer a few questions about
-          preferences, and approve a summary — never the solution.
-        </p>
-      </div>
+      <Interview projectId={id} />
 
       <div className="danger-zone">
         <button

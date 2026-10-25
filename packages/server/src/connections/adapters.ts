@@ -30,10 +30,26 @@ const IMAGE_TEST_PROMPT = "A small red apple on a plain white table, simple flat
  */
 const CODEX_CLIENT_VERSION = "1.0.0";
 
+export interface ChatTurn {
+  role: "user" | "assistant";
+  content: string;
+}
+
+export interface CompletionRequest {
+  modelId: string;
+  system: string;
+  messages: ChatTurn[];
+  /** Ignored by ChatGPT (Codex), which takes no output limit. */
+  maxOutputTokens?: number;
+  timeoutMs?: number;
+}
+
 export interface ProviderAdapter {
   support(capability: Capability): CatalogSupport;
   /** Reads the provider's model list. Never generates anything. */
   listModels(capability: Capability): Promise<CatalogEntry[]>;
+  /** One text generation. Real request: uses quota or credits. */
+  complete(request: CompletionRequest): Promise<string>;
   testText(modelId: string): Promise<string>;
   testImage(modelId: string): Promise<string>;
 }
@@ -88,21 +104,30 @@ class OpenAICompatibleAdapter implements ProviderAdapter {
       .map((m) => entry(m.id as string, typeof m.name === "string" ? m.name : (m.id as string), { contextLength: positiveInt(m.context_length) }));
   }
 
-  async testText(modelId: string): Promise<string> {
+  async complete({ modelId, system, messages, maxOutputTokens, timeoutMs }: CompletionRequest): Promise<string> {
     const json = await requestJson(
       this.fetch,
       joinUrl(this.baseUrl, "chat/completions"),
       {
         method: "POST",
         headers: this.headers(true),
-        body: JSON.stringify({ model: modelId, messages: [{ role: "user", content: TEXT_TEST_PROMPT }], max_tokens: 200, stream: false }),
+        body: JSON.stringify({
+          model: modelId,
+          messages: [...(system ? [{ role: "system", content: system }] : []), ...messages],
+          ...(maxOutputTokens ? { max_tokens: maxOutputTokens } : {}),
+          stream: false,
+        }),
       },
-      { label: `${this.label} text test` },
+      { label: `${this.label} (${modelId})`, timeoutMs: timeoutMs ?? 300_000 },
     );
     const choice = isRecord(json) && Array.isArray(json.choices) ? json.choices[0] : undefined;
     const content = isRecord(choice) && isRecord(choice.message) ? choice.message.content : undefined;
     if (typeof content !== "string") throw new ProviderError(`${this.label} returned no text.`);
     return content;
+  }
+
+  testText(modelId: string): Promise<string> {
+    return this.complete({ modelId, system: "", messages: [{ role: "user", content: TEXT_TEST_PROMPT }], maxOutputTokens: 200, timeoutMs: 60_000 });
   }
 
   protected imagesUrl(): string {
@@ -257,7 +282,7 @@ class CodexAdapter implements ProviderAdapter {
       .filter((m): m is CatalogEntry => m !== null);
   }
 
-  async testText(modelId: string): Promise<string> {
+  async complete({ modelId, system, messages, timeoutMs }: CompletionRequest): Promise<string> {
     const auth = await this.auth.get();
     // Same request shape Marinara sends: Codex requires instructions and streaming, and takes no sampling params.
     const sse = await requestText(
@@ -268,15 +293,22 @@ class CodexAdapter implements ProviderAdapter {
         headers: { ...codexHeaders(auth), "Content-Type": "application/json", Accept: "text/event-stream" },
         body: JSON.stringify({
           model: modelId,
-          instructions: "You are a helpful assistant.",
-          input: [{ role: "user", content: [{ type: "input_text", text: TEXT_TEST_PROMPT }] }],
+          instructions: system || "You are a helpful assistant.",
+          input: messages.map((m) => ({
+            role: m.role,
+            content: [{ type: m.role === "assistant" ? "output_text" : "input_text", text: m.content }],
+          })),
           store: false,
           stream: true,
         }),
       },
-      { label: `${this.label} text test`, timeoutMs: 120_000 },
+      { label: `${this.label} (${modelId})`, timeoutMs: timeoutMs ?? 300_000 },
     );
     return collectResponsesText(sse);
+  }
+
+  testText(modelId: string): Promise<string> {
+    return this.complete({ modelId, system: "", messages: [{ role: "user", content: TEXT_TEST_PROMPT }], timeoutMs: 120_000 });
   }
 
   async testImage(modelId: string): Promise<string> {

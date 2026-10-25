@@ -7,7 +7,45 @@ import { appendFileSync } from "node:fs";
 const port = Number(process.argv[2] ?? 7999);
 const logFile = process.argv[3] ?? "mock-llm-requests.jsonl";
 
+/** Scripted requirements interview: partial answer with questions first, complete answer after. */
+function interviewReply(messages) {
+  const userTurns = messages.filter((m) => m.role === "user").length;
+  const base = {
+    genre: "noir detective mystery",
+    subgenres: ["urban fantasy"],
+    tone: ["gritty", "melancholic"],
+    narration: { pov: "second", tense: "present", style: "hard-boiled first impressions" },
+    setting: { era: "alternate 1940", place: "New York City", technology: "1940s", supernatural: "fantasy races and everyday magic", notes: "" },
+    startingSituation: "",
+    protagonist: { mode: "new", notes: "a small-time private investigator" },
+    maxNpcCards: 4,
+  };
+  if (userTurns <= 1) {
+    return JSON.stringify({
+      message: "A noir case in a magical 1940 New York — great start. A few quick choices:",
+      questions: ["Where does the first scene happen — your office, or somewhere else?", "Who is the real killer?", "Any topics you never want to see?"],
+      requirements: base,
+      assumptions: ["Length: medium (a few sessions)"],
+      readyForSummary: false,
+    });
+  }
+  return JSON.stringify({
+    message: "Thanks, I have everything I need. Please review the summary.",
+    questions: [],
+    requirements: {
+      ...base,
+      startingSituation: "Late evening in the investigator's cramped office when a woman in a red dress walks in.",
+      content: { violence: "moderate", romance: "background", sexualContent: "fade-to-black", horror: "light", hardLimits: ["harm to children"] },
+      visualStyle: "painted 1940s pulp illustration",
+    },
+    assumptions: ["Length: medium (a few sessions)", "Narration: second person, present tense"],
+    readyForSummary: true,
+  });
+}
+
 function reply(body) {
+  const system = (body.messages ?? []).find((m) => m.role === "system")?.content ?? "";
+  if (system.includes("You interview a player")) return interviewReply(body.messages);
   const text = JSON.stringify(body.messages ?? body.input ?? "");
   if (text.includes("overarchingArc")) {
     return JSON.stringify({

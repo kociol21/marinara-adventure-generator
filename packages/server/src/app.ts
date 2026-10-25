@@ -16,6 +16,10 @@ import { settingsRoutes } from "./routes/settings.ts";
 import { assignmentRoutes, connectionRoutes } from "./routes/connections.ts";
 import { createCodexAuth, type CodexAuthClient } from "./connections/codex-auth.ts";
 import type { FetchFn } from "./connections/http.ts";
+import { createInterviewRepo } from "./repos/interview.ts";
+import { createInterviewService } from "./interview/interview.ts";
+import { createTextGenerator } from "./generation/text.ts";
+import { interviewRoutes } from "./routes/interview.ts";
 
 export interface AppDeps {
   db: Db;
@@ -56,11 +60,14 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
   };
   const fetchFn = deps.fetch ?? fetch;
   const adapterDeps = { fetch: fetchFn, codexAuth: deps.codexAuth ?? createCodexAuth({ fetch: fetchFn }) };
+  const text = createTextGenerator(deps.db, repos.connections, adapterDeps);
+  const interview = createInterviewService({ interview: createInterviewRepo(deps.db), projects: repos.projects, text });
 
   await app.register(
     async (api) => {
       await api.register(healthRoutes, { dataDir: deps.dataDir, secretStore: deps.secretStore.kind });
       await api.register(projectRoutes, { prefix: "/projects", projects: repos.projects });
+      await api.register(interviewRoutes, { prefix: "/projects", projects: repos.projects, interview });
       await api.register(settingsRoutes, { prefix: "/settings", settings: repos.settings });
       await api.register(secretRoutes, { prefix: "/secrets", secrets: repos.secrets });
       await api.register(connectionRoutes, { prefix: "/connections", connections: repos.connections, adapterDeps });
