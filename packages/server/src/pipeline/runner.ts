@@ -268,7 +268,17 @@ export function createPipeline(deps: Deps) {
         const used = deps.stages.fixRounds(projectId, hashBase);
         const judgeFailing = !!judge && judge.parts.some((p) => p.score <= judge.threshold);
         const limit = judgeFailing && !restored && !plateau(projectId, hashBase) ? Math.max(repairAttempts, deps.settings.get().judgeMaxRounds) : repairAttempts;
-        const toFix = fixable(audit).filter((f) => used < repairAttempts || f.id.startsWith("judge:"));
+        // A part whose last rewrite did not beat its best score gets no more judge rounds; the best
+        // version comes back at the end, and the next re-check stays small.
+        const best = deps.stages.judgeBest(projectId, hashBase);
+        const stalled = (stage: string) => {
+          const b = best.get(stage);
+          const row = rows.get(stage);
+          return !!b && !!row && b.baseHash === row.baseHash && b.outputHash !== row.outputHash;
+        };
+        const toFix = fixable(audit).filter(
+          (f) => (used < repairAttempts && !f.id.startsWith("judge:")) || (f.id.startsWith("judge:") && !stalled(f.target!)),
+        );
         if (toFix.length > 0 && used < limit) {
           const round = deps.stages.lastRound(projectId, hashBase) + 1;
           deps.stages.addNotes(projectId, hashBase, round, toFix.map((f) => ({ stage: f.target!, note: f.fix ?? f.detail })));

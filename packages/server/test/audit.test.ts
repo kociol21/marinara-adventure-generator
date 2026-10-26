@@ -204,8 +204,9 @@ const answers = (questions: Questions, p: number, q = 3.6) =>
     Object.entries(questions).map(([k, v]) => [k, v.type === "score" ? { type: "score", score: q, probabilities: {}, confidence: 0.9 } : { type: "noul", noul: p }]),
   );
 
-async function setup(options: { review?: () => unknown; embeddings?: boolean; decide?: DecideFn; varyBeta?: boolean } = {}) {
+async function setup(options: { review?: () => unknown; embeddings?: boolean; decide?: DecideFn; varyBeta?: boolean; varyAlpha?: boolean } = {}) {
   let betaCalls = 0;
+  let alphaCalls = 0;
   const fake = fakeFetch({
     "POST /decisions": (req) => {
       const body = req.body as { state: Record<string, any>; questions: Questions };
@@ -226,6 +227,8 @@ async function setup(options: { review?: () => unknown; embeddings?: boolean; de
           ? options.review()
           : stage === "card" && sub === "beta" && options.varyBeta
             ? { ...f.cards.beta, description: `${f.cards.beta.description} v${betaCalls++}` }
+            : stage === "card" && sub === "alpha" && options.varyAlpha
+            ? { ...f.cards.alpha, description: `${f.cards.alpha.description} v${alphaCalls++}` }
             : stage === "card"
             ? f.cards[sub!]
             : stage === "lorebook"
@@ -414,6 +417,23 @@ describe("decision-model judge", () => {
     expect(reviews[1]!.length).toBeLessThan(reviews[0]!.length);
     expect(state.audit!.checked.join(" ")).toMatch(/read 1 changed of \d+ parts/);
     expect(state.audit!.checked.join(" ")).toMatch(new RegExp(`1 of ${parts} parts re-scored`));
+  });
+
+  it("stops sending a part back once a rewrite did not beat its best score", async () => {
+    const { id, requests } = await setup({
+      varyBeta: true,
+      varyAlpha: true,
+      // Beta improves every round; Alpha's first rewrite scores no better than the original.
+      decide: (part, v, q) =>
+        part === "card:beta" ? { ...answers(q, 0.9), genre: { type: "noul", noul: 0.17 * v } } : answers(q, part === "card:alpha" ? 0.3 : 0.9),
+    });
+    const state = await run(id);
+    const alphaPrompts = requests.filter((r) => r.url.includes("chat/completions") && stageOf(r).stage === "card" && stageOf(r).sub === "alpha");
+    expect(state.audit!.fixRounds).toBe(4);
+    // The original and one rewrite; later rounds rewrite Beta only.
+    expect(alphaPrompts).toHaveLength(2);
+    expect(betaPrompts(requests)).toHaveLength(5);
+    expect(state.audit!.judge!.parts.find((p) => p.where === "Card: Probe Alpha")).toMatchObject({ pass: false });
   });
 
   it("stops early when a round brings no improvement", async () => {

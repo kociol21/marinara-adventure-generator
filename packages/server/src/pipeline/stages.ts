@@ -180,9 +180,16 @@ export function checkFacts(facts: Facts, plan: Plan, requirements: Requirements)
     if (ids.has(f.id)) problems.push(`fact id ${f.id} is used twice`);
     ids.add(f.id);
   }
+  // The first unknown key also lists the valid ones: small models otherwise invent a new subject again.
+  let listed = false;
+  const unknown = (what: string) => {
+    if (listed) return what;
+    listed = true;
+    return `${what} (entity keys are only: ${[...entities].join(", ")}; pick the closest one)`;
+  };
   for (const f of facts.facts) {
-    if (!entities.has(f.subject)) problems.push(`${f.id}: subject "${f.subject}" is not an entity key`);
-    if (f.holder && !entities.has(f.holder)) problems.push(`${f.id}: holder "${f.holder}" is not an entity key`);
+    if (!entities.has(f.subject)) problems.push(unknown(`${f.id}: subject "${f.subject}" is not an entity key`));
+    if (f.holder && !entities.has(f.holder)) problems.push(unknown(`${f.id}: holder "${f.holder}" is not an entity key`));
     if ((f.layer === "belief" || f.layer === "claim") && !f.holder) problems.push(`${f.id}: a ${f.layer} needs a holder`);
     if (f.contradicts && !ids.has(f.contradicts)) problems.push(`${f.id}: contradicts unknown fact ${f.contradicts}`);
     if (f.home.kind === "card" && !cards.has(f.home.card)) problems.push(`${f.id}: home card "${f.home.card}" is not a card character`);
