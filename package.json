@@ -2,6 +2,7 @@
   "name": "marinara-adventure-generator",
   "version": "0.2.1",
   "private": true,
+  "license": "MIT",
   "description": "Local web app that generates spoiler-free adventures for Marinara Engine",
   "type": "module",
   "packageManager": "pnpm@12.15.0",

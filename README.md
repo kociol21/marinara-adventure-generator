@@ -182,3 +182,7 @@ The design documents are written in Polish:
 - [technical verification](docs/01-weryfikacja-techniczna.md);
 - [architecture](docs/02-architektura-i-plan.md);
 - [acceptance criteria](docs/03-kryteria-akceptacji.md).
+
+## License
+
+[MIT](LICENSE) © 2026 Wojciech Kotliński. You may use, change and share this project, including inside your own projects, as long as you keep the copyright notice and the license text. A mention of this project in your README is appreciated.
