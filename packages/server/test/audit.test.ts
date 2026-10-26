@@ -8,7 +8,8 @@ import type { Pipeline } from "../src/pipeline/runner.ts";
 import { findDuplicates, findSpoilers, findUnreachableClues } from "../src/audit/code-checks.ts";
 import { toFindings } from "../src/audit/review.ts";
 import { textUnits } from "../src/audit/units.ts";
-import { factSchema, planSchema } from "../src/pipeline/schemas.ts";
+import { factSchema, lorebookOutputSchema, planSchema } from "../src/pipeline/schemas.ts";
+import { checkClueEntries } from "../src/pipeline/stages.ts";
 import { fakeFetch, type RecordedRequest } from "./fake-fetch.ts";
 import { readZip } from "./zip-reader.ts";
 import { probeInput } from "./fixtures/probe-package.ts";
@@ -87,6 +88,46 @@ describe("code checks", () => {
     );
     expect(known).toMatchObject({ target: "card:alpha", where: "Card: Probe Alpha", summary: "Card: Probe Alpha: possible contradiction with established facts." });
     expect(unknown).toMatchObject({ target: null, where: "Package", fix: null });
+  });
+
+  it("treat spoilers in lorebook names as minor, and in visible parts as reported", () => {
+    const targets = new Map([
+      ["lorebook:plot", "Lorebook: Plot"],
+      ["opening", "Opening scene and teaser"],
+    ]);
+    const [lore, opening] = toFindings(
+      "spoilers",
+      [
+        { severity: "major", target: "lorebook:plot", detail: "x", fix: "y" },
+        { severity: "major", target: "opening", detail: "x", fix: "y" },
+      ],
+      targets,
+    );
+    expect(lore!.severity).toBe("minor");
+    expect(opening!.severity).toBe("major");
+  });
+
+  it("require clue entries keyed on their place, one place per entry", () => {
+    const plan = planSchema.parse(fixture.plan);
+    const clues = {
+      conclusions: [{ id: "c1", statement: "x", factIds: [] }],
+      clues: [
+        { id: "k1", conclusionId: "c1", where: "harbor", how: "a", factId: "f1" },
+        { id: "k2", conclusionId: "c1", where: "office", how: "b", factId: "f2" },
+      ],
+      redHerrings: [],
+    };
+    const entry = (key: string, keys: string[], factIds: string[]) =>
+      lorebookOutputSchema.parse({ entries: [{ key, name: key, content: "x", keys, factIds }] }).entries[0]!;
+    const mixed = checkClueEntries({ entries: [entry("clues", ["Probe Harbor"], ["f1", "f2"])] }, clues, plan).join(" | ");
+    expect(mixed).toMatch(/mixes clues from 2 places/);
+    expect(mixed).toMatch(/no key for Probe Office/);
+    const good = checkClueEntries(
+      { entries: [entry("harbor-clues", ["Probe Harbor"], ["f1"]), entry("office-clues", ["Probe Office"], ["f2"])] },
+      clues,
+      plan,
+    );
+    expect(good).toEqual([]);
   });
 });
 
@@ -186,8 +227,13 @@ describe("audit stage", () => {
     const chats = requests.filter((r) => r.url.includes("chat/completions"));
     const betaPrompts = chats.filter((r) => stageOf(r).stage === "card" && stageOf(r).sub === "beta").map((r) => stageOf(r).system);
     expect(betaPrompts).toHaveLength(3);
-    expect(betaPrompts[0]).not.toContain("REVISION NOTES");
-    expect(betaPrompts[2]).toContain("FIX_BETA_TIMELINE");
+    expect(betaPrompts[0]).not.toContain("REVISION");
+    // Fixes edit the previous output instead of starting over.
+    expect(betaPrompts[1]).toContain("REVISION of your previous output");
+    expect(betaPrompts[1]).toContain("PREVIOUS OUTPUT");
+    expect(betaPrompts[1]).toContain("CARD_BETA_DESCRIPTION");
+    expect(betaPrompts[1]).toContain("FIX_BETA_TIMELINE");
+    expect(betaPrompts[2]).toContain("Already fixed in earlier revisions");
     // Other cards were not regenerated.
     expect(chats.filter((r) => stageOf(r).sub === "alpha")).toHaveLength(1);
 
@@ -200,6 +246,33 @@ describe("audit stage", () => {
     await app.inject({ method: "PATCH", url: "/api/settings", headers: write, payload: { showSpoilers: true } });
     const revealed = (await app.inject({ method: "GET", url: `/api/projects/${id}/generation`, headers: { host } })).json() as GenerationState;
     expect(revealed.audit!.findings[0]!.detail).toBe("HIDDEN_DETAIL");
+  });
+
+  it("opens a new fix session on request without regenerating what was fixed", async () => {
+    const finding = { area: "consistency", severity: "major", target: "card:beta", detail: "d", fix: "FIX" };
+    const { id, requests } = await setup({ review: () => ({ findings: [finding] }) });
+    await run(id);
+    const chats = () => requests.filter((r) => r.url.includes("chat/completions"));
+    const before = chats().length;
+    const res = await app.inject({ method: "POST", url: `/api/projects/${id}/generation/audit/rerun`, headers: write, payload: { confirmUsage: true } });
+    expect(res.statusCode).toBe(200);
+    await (app as unknown as { pipeline: Pipeline }).pipeline.idle(id);
+    const state = (await app.inject({ method: "GET", url: `/api/projects/${id}/generation`, headers: { host } })).json() as GenerationState;
+    // A fresh audit, then two fix rounds on Beta only. The mock returns an identical card, so the
+    // package does not change and the audit is not repeated after each fix (a real model's would be).
+    const again = chats().slice(before).map((r) => stageOf(r).stage);
+    expect(again).toEqual(["audit-review", "audit-spoilers", "card", "card"]);
+    expect(state.audit!.fixRounds).toBe(2);
+    expect(state.audit!.findings[0]!.fix).toBe("auto");
+  });
+
+  it("leaves plan-level findings to the player and never auto-fixes them", async () => {
+    const finding = { area: "mystery", severity: "major", target: "package", detail: "hole", fix: "rethink" };
+    const { id, requests } = await setup({ review: () => ({ findings: [finding] }) });
+    const state = await run(id);
+    expect(state.audit!.fixRounds).toBe(0);
+    expect(state.audit!.findings[0]).toMatchObject({ where: "Package", fix: "plan", severity: "major" });
+    expect(requests.filter((r) => r.url.includes("chat/completions") && stageOf(r).stage === "audit-review")).toHaveLength(1);
   });
 
   it("uses embeddings for duplicate candidates when an embedding model is assigned", async () => {

@@ -209,7 +209,7 @@ Activation (decide for each entry: when should the narrator see this?):
 Content: write for the narrator who must play scenes from it. Each non-constant entry is ${scaleTargets(r).entryWords}-200 words of concrete detail: what is seen and heard, how people act, what can be learned and under which conditions, how it connects to other subjects. Plain prose, no headings. A one-line entry is too thin to play. Prefer one rich entry per subject over many fragments; split only when parts need different keys or privacy.
 Voice: ${voiceRule(r, "descriptive")}${
     lorebook === "plot" && clues
-      ? `\nAlso render the clue map: for each clue an entry (or a group in one entry) keyed on the place or person where it is found, saying what can be found and how. Keep red herrings with their innocent explanation.`
+      ? `\nAlso render the clue map. Clues go into entries BY PLACE: one entry per place or person where clues are found, keyed on that place's or person's name and aliases, holding only the clues found there and how they can be found. Never gather clues from different places into one entry: it would surface everything everywhere. List each clue's fact id in factIds of its place's entry. Keep red herrings with their innocent explanation.`
       : ""
   }
 

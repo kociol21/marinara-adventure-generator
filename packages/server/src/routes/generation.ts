@@ -32,6 +32,15 @@ export const generationRoutes: FastifyPluginAsync<{ pipeline: Pipeline }> = asyn
     }
   });
 
+  app.post<{ Params: { id: string } }>("/:id/generation/audit/rerun", async (req, reply) => {
+    startGenerationSchema.parse(req.body);
+    try {
+      return pipeline.rerunAudit(req.params.id);
+    } catch (error) {
+      return fail(reply, error);
+    }
+  });
+
   /** Download the Marinara import bundle (zip). */
   app.get<{ Params: { id: string } }>("/:id/export", async (req, reply) => {
     const assembled = pipeline.assembled(req.params.id);

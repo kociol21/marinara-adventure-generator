@@ -254,7 +254,7 @@ describe("generation pipeline", () => {
   it("reports an interrupted stage after a restart", async () => {
     const { id } = await setup();
     const stages = createStagesRepo(db);
-    stages.start(id, "plan", "x");
+    stages.start(id, "plan", "x", "x");
     createPipeline({ stages, interview: {} as never, projects: {} as never, settings: {} as never, text: {} as never });
     expect(stages.all(id).get("plan")).toMatchObject({ status: "failed", error: expect.stringMatching(/Interrupted/) });
   });

@@ -122,4 +122,17 @@ export const migrations: string[] = [
   );
   CREATE INDEX stage_note_project ON stage_note(project_id, basis);
   `,
+  `
+  -- Input hash without audit notes: equal base hashes mean only notes changed, so a rerun can
+  -- edit the previous output instead of starting over.
+  ALTER TABLE stage_run ADD COLUMN base_hash TEXT;
+
+  -- Fix rounds count from here; a new fix session keeps earlier notes but allows new rounds.
+  CREATE TABLE audit_session (
+    project_id   TEXT NOT NULL REFERENCES project(id) ON DELETE CASCADE,
+    basis        TEXT NOT NULL,
+    after_round  INTEGER NOT NULL,
+    PRIMARY KEY (project_id, basis)
+  );
+  `,
 ];

@@ -41,6 +41,11 @@ export function Generation({ projectId }: { projectId: string }) {
     onSuccess: after,
   });
 
+  const rerunAudit = useMutation({
+    mutationFn: () => api.post<GenerationState>(`/projects/${projectId}/generation/audit/rerun`, { confirmUsage: true }),
+    onSuccess: after,
+  });
+
   // A finished run changes the project (status, teaser); refresh it when running turns off.
   const running = state.data?.running ?? false;
   const wasRunning = useRef(running);
@@ -117,7 +122,22 @@ export function Generation({ projectId }: { projectId: string }) {
       </div>
       {(start.isError || retry.isError) && <p className="error">{(start.error ?? retry.error)?.message}</p>}
 
-      {s.audit && !s.running && <AuditReport audit={s.audit} />}
+      {s.audit && !s.running && (
+        <AuditReport
+          audit={s.audit}
+          busy={rerunAudit.isPending || retry.isPending}
+          onRerun={() =>
+            confirmRun("Run the quality audit again with a new set of automatic fix rounds?", () => rerunAudit.mutate())
+          }
+          onRegeneratePlan={() =>
+            confirmRun(
+              "Regenerate the plan? This rewrites the whole adventure: plan, facts, clues, cards, persona, lorebooks and opening.",
+              () => retry.mutate("plan"),
+            )
+          }
+        />
+      )}
+      {rerunAudit.isError && <p className="error">{rerunAudit.error.message}</p>}
 
       {s.ready && s.warnings.length > 0 && (
         <div className="assumptions">

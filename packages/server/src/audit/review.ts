@@ -100,7 +100,7 @@ ${JSON_ONLY}
 export function spoilerReviewPrompt(plan: Plan, facts: Facts, visible: TextUnit[], targets: Map<string, string>): string {
   return `Stage: audit-spoilers
 You check what the PLAYER sees of an adventure before and during play for spoilers. The player wants to discover the story; seeing a secret, the culprit, a hidden motive, a twist or a strong hint at one ruins it.
-Visible material: character names and library tags, the persona card, the teaser, greetings and the opening scene, lorebook entry names and keys. Introducing characters, places and the starting situation is fine; giving away or loudly hinting at what is hidden is not. A greeting may show a character's evasiveness or mood without stating the secret behind it.
+Visible material: character names and library tags, the persona card, the teaser, greetings and the opening scene. Lorebook entry names and keys are seen only if the player opens Marinara's lorebook editor; flag them only for blatant give-aways, as minor. Introducing characters, places and the starting situation is fine; giving away or loudly hinting at what is hidden is not. A greeting may show a character's evasiveness or mood without stating the secret behind it.
 Report only real spoilers or strong hints; an empty list is a fine answer. For each, pick the target that should be rewritten:
 ${targetList(targets)}
 
@@ -140,10 +140,13 @@ export function toFindings(
     const a = (area ?? item.area) as Exclude<AuditArea, "structure" | "activation">;
     const known = targets.has(item.target);
     const where = known ? targets.get(item.target)! : "Package";
+    // Lorebook names and keys are visible only inside the lorebook editor, and Plot entries describe
+    // secrets by nature: a spoiler there is minor and never worth an automatic rewrite.
+    const minorOnly = a === "spoilers" && item.target.startsWith("lorebook:");
     return {
       id: `model-${++counter}`,
       area: a,
-      severity: item.severity,
+      severity: minorOnly ? "minor" : item.severity,
       source: "model" as const,
       target: known ? item.target : null,
       where,

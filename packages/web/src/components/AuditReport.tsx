@@ -1,9 +1,21 @@
 import { AUDIT_AREA_LABELS, type AuditArea, type AuditReportView } from "@adv/shared";
 
 /** Spoiler-free audit report. Details appear only when the server sends them (Show spoilers on). */
-export function AuditReport({ audit }: { audit: AuditReportView }) {
+export function AuditReport({
+  audit,
+  busy,
+  onRerun,
+  onRegeneratePlan,
+}: {
+  audit: AuditReportView;
+  busy: boolean;
+  onRerun: () => void;
+  onRegeneratePlan: () => void;
+}) {
   const major = audit.findings.filter((f) => f.severity === "major").length;
   const areas = [...new Set(audit.findings.map((f) => f.area))] as AuditArea[];
+  const planLevel = audit.findings.filter((f) => f.severity === "major" && f.fix === "plan").length;
+  const autoOpen = audit.findings.filter((f) => f.severity === "major" && f.fix === "auto").length;
 
   return (
     <div className="audit">
@@ -27,12 +39,34 @@ export function AuditReport({ audit }: { audit: AuditReportView }) {
                 <li key={f.id}>
                   <span className={`badge badge-${f.severity}`}>{f.severity}</span> {f.summary}
                   {f.source === "model" && <span className="muted small"> (model review)</span>}
+                  {f.fix === "plan" && <span className="muted small"> (needs a new plan)</span>}
                   {f.detail && <pre className="small stage-detail">{f.detail}</pre>}
                 </li>
               ))}
           </ul>
         </div>
       ))}
+
+      {(autoOpen > 0 || planLevel > 0) && (
+        <div className="row">
+          {autoOpen > 0 && (
+            <button className="secondary" disabled={busy} onClick={onRerun}>
+              Run audit and fixes again
+            </button>
+          )}
+          {planLevel > 0 && (
+            <button className="secondary" disabled={busy} onClick={onRegeneratePlan}>
+              Regenerate the plan
+            </button>
+          )}
+        </div>
+      )}
+      {planLevel > 0 && (
+        <p className="muted small">
+          {planLevel === 1 ? "One major finding sits" : `${planLevel} major findings sit`} in the plan or fact registry, which
+          automatic fixes do not rewrite. Regenerating the plan rewrites the whole adventure.
+        </p>
+      )}
 
       <details>
         <summary className="muted small">What was checked, and what was not</summary>

@@ -53,11 +53,12 @@ export function createPipeline(deps: Deps) {
     return buildStages(requirements, plan?.status === "done" ? (plan.output as Plan) : null);
   }
 
-  type Notes = Map<string, string[]>;
+  type Notes = Map<string, Array<{ round: number; note: string }>>;
+  const NO_NOTES: Notes = new Map();
 
   function inputHash(def: StageDef, hashBase: string, title: string, rows: Map<string, StageRow>, notes: Notes): string {
     // Version and audit notes join the hash only when present, so existing stage hashes stay valid.
-    const stageNotes = notes.get(def.id) ?? [];
+    const stageNotes = (notes.get(def.id) ?? []).map((n) => n.note);
     return sha([
       PROMPT_VERSION,
       def.id,
@@ -126,6 +127,8 @@ export function createPipeline(deps: Deps) {
             where: f.where,
             summary: f.summary,
             source: f.source,
+            // A finding no single rendering stage can fix sits in the plan or facts (e.g. a logic hole).
+            fix: f.target && FIXABLE_STAGE.test(f.target) ? "auto" : f.target === null && f.where === "Package" ? "plan" : "none",
             ...(showSpoilers ? { detail: f.detail } : {}),
           })),
         }
@@ -152,9 +155,9 @@ export function createPipeline(deps: Deps) {
       if (!next) {
         // Everything is current. Send major audit findings back to their stages, up to the round limit (spec §15).
         const toFix = fixable(rows.get("audit")?.output as AuditOutput | undefined);
-        const round = deps.stages.fixRounds(projectId, hashBase);
-        if (toFix.length > 0 && round < repairAttempts) {
-          deps.stages.addNotes(projectId, hashBase, round + 1, toFix.map((f) => ({ stage: f.target!, note: f.fix ?? f.detail })));
+        if (toFix.length > 0 && deps.stages.fixRounds(projectId, hashBase) < repairAttempts) {
+          const round = deps.stages.lastRound(projectId, hashBase) + 1;
+          deps.stages.addNotes(projectId, hashBase, round, toFix.map((f) => ({ stage: f.target!, note: f.fix ?? f.detail })));
           continue;
         }
         deps.projects.setStatus(projectId, "ready");
@@ -168,7 +171,14 @@ export function createPipeline(deps: Deps) {
         text: deps.text,
         repairAttempts,
         has: (id) => rows.get(id)?.status === "done",
-        notes: (id) => notes.get(id) ?? [],
+        revision: (id) => {
+          const stageNotes = notes.get(id) ?? [];
+          const row = rows.get(id);
+          const def = defs.find((d) => d.id === id);
+          // Edit the previous output only when nothing but the notes changed since it was written.
+          const sameBase = !!def && !!row?.output && row.baseHash === inputHash(def, hashBase, project.title, rows, NO_NOTES);
+          return { notes: stageNotes, previous: sameBase ? row!.output : null };
+        },
         embedder: deps.embedder ?? null,
         output: <T>(id: string) => {
           const row = rows.get(id);
@@ -177,7 +187,12 @@ export function createPipeline(deps: Deps) {
         },
       };
 
-      deps.stages.start(projectId, next.id, inputHash(next, hashBase, project.title, rows, notes));
+      deps.stages.start(
+        projectId,
+        next.id,
+        inputHash(next, hashBase, project.title, rows, notes),
+        inputHash(next, hashBase, project.title, rows, NO_NOTES),
+      );
       try {
         const output = await next.run(ctx);
         deps.stages.finish(projectId, next.id, output, sha(output), next.summary(output));
@@ -221,6 +236,18 @@ export function createPipeline(deps: Deps) {
       const rows = deps.stages.all(projectId);
       if (!rows.has(stageId)) throw new PipelineError("Unknown stage.", 404);
       deps.stages.invalidate(projectId, stageId);
+      return start(projectId);
+    },
+
+    /**
+     * Audit again with a fresh fix-round budget. Earlier notes stay in force (they are part of
+     * their stages' hashes), so nothing already fixed is regenerated from scratch.
+     */
+    rerunAudit(projectId: string): GenerationState {
+      if (jobs.has(projectId)) throw new PipelineError("Generation is already running.", 409);
+      const { hashBase } = approvedRequirements(projectId);
+      deps.stages.newFixSession(projectId, hashBase);
+      if (deps.stages.all(projectId).has("audit")) deps.stages.invalidate(projectId, "audit");
       return start(projectId);
     },
 

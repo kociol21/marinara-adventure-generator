@@ -35,8 +35,11 @@ export interface StageContext {
   /** Output of a finished dependency. */
   output<T>(stageId: string): T;
   has(stageId: string): boolean;
-  /** Audit fix notes for a stage (empty when none). */
-  notes(stageId: string): string[];
+  /**
+   * Audit fix notes for a stage, oldest first, and its previous output when only the notes changed
+   * since that output was written (then the stage edits it instead of starting over).
+   */
+  revision(stageId: string): { notes: Array<{ round: number; note: string }>; previous: unknown };
   embedder: Embedder | null;
 }
 
@@ -61,11 +64,30 @@ function llmStage<S extends z.ZodType>(
   system: string,
   check?: (value: z.infer<S>) => string[],
 ): Promise<z.infer<S>> {
-  const notes = ctx.notes(purpose);
-  const revised = notes.length
-    ? `${system}\n\nREVISION NOTES from the quality audit of the previous version. Write your part so these problems are gone, and keep everything else consistent with the plan and facts:\n${notes.map((n) => `- ${n}`).join("\n")}`
-    : system;
+  const { notes, previous } = ctx.revision(purpose);
+  const revised = notes.length ? `${system}\n\n${revisionBlock(notes, previous)}` : system;
   return ctx.text.generateJson(schema, { projectId: ctx.projectId, purpose, system: revised, messages: KICKOFF }, ctx.repairAttempts, check);
+}
+
+/**
+ * Fixes edit the previous version when possible. Regenerating a whole lorebook to fix one entry
+ * produced new problems every round (first real audit: no convergence after two rounds).
+ */
+export function revisionBlock(notes: Array<{ round: number; note: string }>, previous: unknown): string {
+  const latest = Math.max(...notes.map((n) => n.round));
+  const now = notes.filter((n) => n.round === latest).map((n) => `- ${n.note}`);
+  const earlier = notes.filter((n) => n.round !== latest).map((n) => `- ${n.note}`);
+  if (previous) {
+    return `REVISION of your previous output, after a quality audit.
+Return the COMPLETE JSON again, changing ONLY what the notes below require. Keep every other entry and field exactly as it was: same keys, same names, same wording, same order. Do not rewrite, merge or reorder anything the notes do not mention.
+Fix now:
+${now.join("\n")}${earlier.length ? `\nAlready fixed in earlier revisions (keep them fixed):\n${earlier.join("\n")}` : ""}
+
+PREVIOUS OUTPUT
+${JSON.stringify(previous)}`;
+  }
+  return `NOTES from a quality audit of an earlier version. Make sure these problems do not occur:
+${[...now, ...earlier].join("\n")}`;
 }
 
 /** Stages the audit may send fix notes to: renderings only. Plan and facts would cascade into everything. */
@@ -140,6 +162,31 @@ export function checkClues(clues: Clues, plan: Plan, facts: Facts): string[] {
     if (!clues.conclusions.some((c) => c.id === k.conclusionId)) problems.push(`clue ${k.id} points to unknown conclusion ${k.conclusionId}`);
     if (!entities.has(k.where)) problems.push(`clue ${k.id}: "${k.where}" is not an entity key`);
     if (k.factId && !factIds.has(k.factId)) problems.push(`clue ${k.id}: unknown fact ${k.factId}`);
+  }
+  return problems;
+}
+
+/**
+ * Clue entries by place: each clue must surface where it is found, and no entry may hold clues
+ * from several places (the first real audit found one entry gathering five places' clues).
+ */
+export function checkClueEntries(out: LorebookOutput, clues: Clues, plan: Plan): string[] {
+  const problems: string[] = [];
+  const entryOf = new Map<string, LorebookOutput["entries"][number]>();
+  for (const e of out.entries) for (const id of e.factIds) entryOf.set(id, e);
+  const placesByEntry = new Map<string, Set<string>>();
+  for (const clue of clues.clues) {
+    if (!clue.factId) continue;
+    const entry = entryOf.get(clue.factId);
+    const place = plan.entities.find((x) => x.key === clue.where);
+    if (!entry || !place) continue;
+    placesByEntry.set(entry.key, (placesByEntry.get(entry.key) ?? new Set()).add(place.key));
+    const names = [place.name, ...place.aliases].map((n) => n.toLowerCase());
+    const keyed = entry.keys.some((k) => names.some((n) => k.toLowerCase().includes(n) || n.includes(k.toLowerCase())));
+    if (!keyed) problems.push(`entry "${entry.key}" holds clue ${clue.id} found at "${place.name}" but has no key for ${place.name}; key it on the place where the clue is found`);
+  }
+  for (const [entryKey, places] of placesByEntry) {
+    if (places.size > 1) problems.push(`entry "${entryKey}" mixes clues from ${places.size} places (${[...places].join(", ")}); split it into one entry per place`);
   }
   return problems;
 }
@@ -255,10 +302,13 @@ export function buildStages(requirements: Requirements, plan: Plan | null): Stag
         const facts = ctx.output<Facts>("facts").facts.filter((f) => f.home.kind === "lorebook" && f.home.lorebook === lb);
         if (facts.length === 0) return { entries: [] } satisfies LorebookOutput;
         const clues = lb === "plot" && ctx.has("clues") ? ctx.output<Clues>("clues") : null;
-        return llmStage(ctx, `lorebook:${lb}`, lorebookOutputSchema, lorebookPrompt(ctx.requirements, p, lb, facts, clues), (o) =>
-          checkLorebook(o, facts.map((f) => f.id), cardKeys, ctx.requirements),
-        );
+        return llmStage(ctx, `lorebook:${lb}`, lorebookOutputSchema, lorebookPrompt(ctx.requirements, p, lb, facts, clues), (o) => [
+          ...checkLorebook(o, facts.map((f) => f.id), cardKeys, ctx.requirements),
+          ...(clues ? checkClueEntries(o, clues, p) : []),
+        ]);
       },
+      // Plot 2: clue entries by place (prompt + check). Only Plot re-runs for existing projects.
+      ...(lb === "plot" ? { version: "2" } : {}),
       summary: (o) => plural((o as LorebookOutput).entries.length, "entry"),
     });
   }

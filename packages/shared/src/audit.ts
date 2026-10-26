@@ -34,6 +34,8 @@ export interface AuditFindingView {
   summary: string;
   /** "code" or "model": who found it. Model findings are heuristic. */
   source: "code" | "model";
+  /** How it can be fixed: automatically in one part, only by regenerating the plan, or not automatically. */
+  fix: "auto" | "plan" | "none";
   /** Hidden-content explanation; present only when "Show spoilers" is on. */
   detail?: string;
 }

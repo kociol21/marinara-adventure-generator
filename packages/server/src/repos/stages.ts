@@ -5,6 +5,8 @@ export interface StageRow {
   stage: string;
   status: StageStatus;
   inputHash: string | null;
+  /** Input hash without audit notes. */
+  baseHash: string | null;
   output: unknown;
   outputHash: string | null;
   summary: string | null;
@@ -18,6 +20,7 @@ interface RawRow {
   stage: string;
   status: StageStatus;
   input_hash: string | null;
+  base_hash: string | null;
   output: string | null;
   output_hash: string | null;
   summary: string | null;
@@ -31,6 +34,7 @@ const toRow = (r: RawRow): StageRow => ({
   stage: r.stage,
   status: r.status,
   inputHash: r.input_hash,
+  baseHash: r.base_hash,
   output: r.output === null ? null : JSON.parse(r.output),
   outputHash: r.output_hash,
   summary: r.summary,
@@ -47,14 +51,15 @@ export function createStagesRepo(db: Db) {
       return new Map(rows.map((r) => [r.stage, toRow(r)]));
     },
 
-    start(projectId: string, stage: string, inputHash: string): void {
+    /** Marks a stage running. Its previous output stays until finish, so a revision can edit it. */
+    start(projectId: string, stage: string, inputHash: string, baseHash: string): void {
       db.prepare(`
-        INSERT INTO stage_run (project_id, stage, status, input_hash, attempts, started_at)
-        VALUES (?, ?, 'running', ?, 1, ?)
+        INSERT INTO stage_run (project_id, stage, status, input_hash, base_hash, attempts, started_at)
+        VALUES (?, ?, 'running', ?, ?, 1, ?)
         ON CONFLICT(project_id, stage) DO UPDATE SET
-          status = 'running', input_hash = excluded.input_hash, attempts = stage_run.attempts + 1,
-          started_at = excluded.started_at, error = NULL, error_detail = NULL
-      `).run(projectId, stage, inputHash, new Date().toISOString());
+          status = 'running', input_hash = excluded.input_hash, base_hash = excluded.base_hash,
+          attempts = stage_run.attempts + 1, started_at = excluded.started_at, error = NULL, error_detail = NULL
+      `).run(projectId, stage, inputHash, baseHash, new Date().toISOString());
     },
 
     finish(projectId: string, stage: string, output: unknown, outputHash: string, summary: string): void {
@@ -96,19 +101,35 @@ export function createStagesRepo(db: Db) {
       return new Map(rows.map((r) => [r.stage, r.calls]));
     },
 
-    /** Audit fix notes per stage, for the given requirements basis. */
-    notes(projectId: string, basis: string): Map<string, string[]> {
+    /** Audit fix notes per stage, oldest first, for the given requirements basis. */
+    notes(projectId: string, basis: string): Map<string, Array<{ round: number; note: string }>> {
       const rows = db
-        .prepare("SELECT stage, note FROM stage_note WHERE project_id = ? AND basis = ? ORDER BY id")
-        .all(projectId, basis) as Array<{ stage: string; note: string }>;
-      const out = new Map<string, string[]>();
-      for (const r of rows) out.set(r.stage, [...(out.get(r.stage) ?? []), r.note]);
+        .prepare("SELECT stage, round, note FROM stage_note WHERE project_id = ? AND basis = ? ORDER BY id")
+        .all(projectId, basis) as Array<{ stage: string; round: number; note: string }>;
+      const out = new Map<string, Array<{ round: number; note: string }>>();
+      for (const r of rows) out.set(r.stage, [...(out.get(r.stage) ?? []), { round: r.round, note: r.note }]);
       return out;
     },
 
-    fixRounds(projectId: string, basis: string): number {
+    /** Highest note round ever written (rounds keep counting across fix sessions). */
+    lastRound(projectId: string, basis: string): number {
       const row = db.prepare("SELECT MAX(round) AS r FROM stage_note WHERE project_id = ? AND basis = ?").get(projectId, basis) as { r: number | null };
       return row.r ?? 0;
+    },
+
+    /** Fix rounds used in the current fix session. */
+    fixRounds(projectId: string, basis: string): number {
+      const session = db.prepare("SELECT after_round FROM audit_session WHERE project_id = ? AND basis = ?").get(projectId, basis) as
+        | { after_round: number }
+        | undefined;
+      return this.lastRound(projectId, basis) - (session?.after_round ?? 0);
+    },
+
+    /** Start a new fix session: earlier notes stay (and keep their effect), the round budget resets. */
+    newFixSession(projectId: string, basis: string): void {
+      db.prepare(
+        "INSERT INTO audit_session (project_id, basis, after_round) VALUES (?, ?, ?) ON CONFLICT(project_id, basis) DO UPDATE SET after_round = excluded.after_round",
+      ).run(projectId, basis, this.lastRound(projectId, basis));
     },
 
     addNotes(projectId: string, basis: string, round: number, notes: Array<{ stage: string; note: string }>): void {
