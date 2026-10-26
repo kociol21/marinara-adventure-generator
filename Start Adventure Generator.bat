@@ -32,15 +32,28 @@ echo Building the web app...
 call %PNPM% build
 if errorlevel 1 goto failed
 
-rem Open the browser once the server answers.
-start "" /b powershell -NoProfile -WindowStyle Hidden -Command "for ($i = 0; $i -lt 60; $i++) { try { Invoke-WebRequest -UseBasicParsing -TimeoutSec 2 '%HEALTH%' | Out-Null; Start-Process '%URL%'; break } catch { Start-Sleep -Seconds 1 } }"
+rem Run the server in the background, without a window; Settings has a Stop server button.
+if not exist "data" mkdir "data"
+echo Starting the server...
+powershell -NoProfile -Command "Start-Process -FilePath node -ArgumentList '--import','tsx','src/index.ts','--production' -WorkingDirectory '%CD%\packages\server' -WindowStyle Hidden -RedirectStandardOutput '%CD%\data\server.log' -RedirectStandardError '%CD%\data\server-errors.log'"
+if errorlevel 1 goto failed
 
+rem Wait for it to answer, then open the browser and close this window.
+powershell -NoProfile -Command "for ($i = 0; $i -lt 60; $i++) { try { Invoke-WebRequest -UseBasicParsing -TimeoutSec 2 '%HEALTH%' | Out-Null; exit 0 } catch { Start-Sleep -Seconds 1 } }; exit 1"
+if errorlevel 1 (
+  echo.
+  echo The server did not start. Its messages:
+  type "data\server-errors.log"
+  powershell -NoProfile -Command "Get-Content -Tail 20 'data\server.log'"
+  pause
+  exit /b 1
+)
+start "" "%URL%"
 echo.
-echo Adventure Generator: %URL%
-echo Close this window (or press Ctrl+C) to stop it.
-echo.
-call %PNPM% start
-goto :eof
+echo Adventure Generator is running in the background: %URL%
+echo To stop it, open Settings and press Stop server.
+ping -n 5 127.0.0.1 >nul
+exit /b 0
 
 :failed
 echo.

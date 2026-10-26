@@ -1,3 +1,4 @@
+import { existsSync } from "node:fs";
 import { buildApp } from "./app.ts";
 import { loadConfig } from "./config.ts";
 import { openDatabase } from "./db/database.ts";
@@ -11,6 +12,12 @@ const secretStore: SecretStore =
   config.secretStore === "file"
     ? new FileSecretStore(config.dataDir)
     : new (await import("./secrets/keyring-store.ts")).KeyringSecretStore();
+const shutdown = async () => {
+  await app.close();
+  db.close();
+  process.exit(0);
+};
+
 const app = await buildApp({
   db,
   secretStore,
@@ -19,13 +26,9 @@ const app = await buildApp({
   trustedPorts: config.production ? [] : [WEB_DEV_PORT],
   webDistDir: config.production ? config.webDistDir : undefined,
   logger: true,
+  // In Docker the container would only start again; it is stopped with docker compose.
+  ...(existsSync("/.dockerenv") ? {} : { stop: () => void shutdown() }),
 });
-
-const shutdown = async () => {
-  await app.close();
-  db.close();
-  process.exit(0);
-};
 process.on("SIGINT", shutdown);
 process.on("SIGTERM", shutdown);
 

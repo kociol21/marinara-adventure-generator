@@ -71,9 +71,9 @@ You can use any of these. Each task (text, image, embedding, judge) gets its own
 
 ## Quick start
 
-**Windows:** double-click `Start Adventure Generator.bat`. The first start installs dependencies and builds the app, which takes a minute or two. After that, the browser opens at http://localhost:7880. If the app is already running, the file just opens the browser.
+**Windows:** double-click `Start Adventure Generator.bat`. The first start installs dependencies and builds the app, which takes a minute or two. After that, the browser opens at http://localhost:7880. The server then runs in the background without a window; to stop it, open **Settings** and press **Stop server**. If the app is already running, the file just opens the browser. If the server does not start, the launcher shows its messages; they are also in `data/server.log`.
 
-**Linux and macOS:** run `./start.sh` from the app folder. It does the same as the Windows launcher.
+**Linux and macOS:** run `./start.sh` from the app folder. It installs and builds like the Windows launcher, but the server runs in that terminal; close it or press Ctrl+C to stop.
 
 **By hand, on any system:**
 

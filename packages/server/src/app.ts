@@ -46,6 +46,8 @@ export interface AppDeps {
   /** Outbound HTTP for providers; replaced in tests. */
   fetch?: FetchFn;
   codexAuth?: CodexAuthClient;
+  /** Stops the process; offered in Settings when present. */
+  stop?: () => void;
 }
 
 export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
@@ -95,7 +97,7 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
 
   await app.register(
     async (api) => {
-      await api.register(healthRoutes, { dataDir: deps.dataDir, secretStore: deps.secretStore.kind });
+      await api.register(healthRoutes, { dataDir: deps.dataDir, secretStore: deps.secretStore.kind, stop: deps.stop });
       await api.register(projectRoutes, { prefix: "/projects", projects: repos.projects, portraitsDir });
       await api.register(interviewRoutes, { prefix: "/projects", projects: repos.projects, interview });
       await api.register(generationRoutes, { prefix: "/projects", pipeline, secrets: repos.secrets });

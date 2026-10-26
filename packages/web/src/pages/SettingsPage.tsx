@@ -9,6 +9,7 @@ import {
   type UpdateSettingsInput,
 } from "@adv/shared";
 import { api } from "../api.ts";
+import { askConfirm } from "../components/ConfirmDialog.tsx";
 import { useEffect, useState } from "react";
 
 export function SettingsPage() {
@@ -163,7 +164,41 @@ export function SettingsPage() {
           </dd>
         </dl>
       </div>
+
+      {health.data?.canStop && <StopServer />}
     </section>
+  );
+}
+
+/** The launcher runs the server without a window, so this is where it is stopped. */
+function StopServer() {
+  const [stopped, setStopped] = useState(false);
+  const stop = useMutation({
+    mutationFn: () => api.post<{ stopping: boolean }>("/server/stop", {}),
+    onSuccess: () => setStopped(true),
+  });
+  const onClick = async () => {
+    if (await askConfirm("Stop the Adventure Generator server? A generation in progress stops too; you can resume it later. Start the app again with the launcher.")) {
+      stop.mutate();
+    }
+  };
+  return (
+    <div className="panel">
+      <h2>Server</h2>
+      {stopped ? (
+        <p>The server has stopped. You can close this tab. To use the app again, start it with the launcher.</p>
+      ) : (
+        <>
+          <p className="muted small">The server runs in the background, without a window. Stop it here when you are done.</p>
+          <div className="row">
+            <button className="secondary" disabled={stop.isPending} onClick={() => void onClick()}>
+              Stop server
+            </button>
+          </div>
+          {stop.isError && <p className="error">{stop.error.message}</p>}
+        </>
+      )}
+    </div>
   );
 }
 

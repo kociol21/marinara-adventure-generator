@@ -17,6 +17,8 @@ export interface HealthResponse {
   version: string;
   dataDir: string;
   secretStore: "os-keyring" | "file" | "memory";
+  /** The app can stop its own server (not in Docker, where the container would start it again). */
+  canStop: boolean;
 }
 
 /** Latest release on GitHub, when "Check for updates" is on and GitHub answered. */

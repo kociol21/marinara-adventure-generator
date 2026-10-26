@@ -40,6 +40,21 @@ describe("security", () => {
     expect(res.statusCode).toBe(403);
   });
 
+  it("stops the server only when it was given a way to, and only with the CSRF header", async () => {
+    expect((await app.inject({ method: "GET", url: "/api/health", headers: { host } })).json().canStop).toBe(false);
+    expect((await app.inject({ method: "POST", url: "/api/server/stop", headers: write, payload: {} })).statusCode).toBe(409);
+
+    let stopped = 0;
+    const stoppable = await buildApp({ db, secretStore: store, dataDir: "test-data", port: PORT, stop: () => stopped++ });
+    expect((await stoppable.inject({ method: "GET", url: "/api/health", headers: { host } })).json().canStop).toBe(true);
+    const noHeader = await stoppable.inject({ method: "POST", url: "/api/server/stop", headers: { host, "content-type": "application/json" }, payload: {} });
+    expect(noHeader.statusCode).toBe(403);
+    expect((await stoppable.inject({ method: "POST", url: "/api/server/stop", headers: write, payload: {} })).json()).toEqual({ stopping: true });
+    await new Promise((r) => setTimeout(r, 300));
+    expect(stopped).toBe(1);
+    await stoppable.close();
+  });
+
   it("rejects writes from a foreign Origin even with the header", async () => {
     const res = await app.inject({
       method: "POST",
