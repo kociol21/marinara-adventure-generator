@@ -126,10 +126,18 @@ export function findUnreachableClues(pkg: AdventurePackage, plan: Plan, clues: C
   if (!clues) return [];
   const findings: AuditFinding[] = [];
   const cards = pkg.characters.map((c) => c.key);
-  const entryOfFact = new Map<string, { lb: string; key: string; name: string }>();
+  const entryOfFact = new Map<string, { lb: string; key: string; name: string; secondary: string[] }>();
   for (const lb of pkg.lorebooks) {
     lb.entries.forEach((e, i) => {
-      for (const id of e.factIds) entryOfFact.set(id, { lb: lb.key, key: e.key, name: `Lorebook: ${lb.name}, entry #${i + 1}` });
+      // A selective entry may deliberately wait for a second word ("search", "drawer") besides its place:
+      // that still surfaces the clue where it belongs, so the probe includes what its AND logic needs.
+      const secondary =
+        e.type === "selective" && e.selectiveLogic === "and_all"
+          ? e.secondaryKeys
+          : e.type === "selective" && e.selectiveLogic === "and_any"
+            ? e.secondaryKeys.slice(0, 1)
+            : [];
+      for (const id of e.factIds) entryOfFact.set(id, { lb: lb.key, key: e.key, name: `Lorebook: ${lb.name}, entry #${i + 1}`, secondary });
     });
   }
   for (const clue of clues.clues) {
@@ -139,7 +147,8 @@ export function findUnreachableClues(pkg: AdventurePackage, plan: Plan, clues: C
     const place = plan.entities.find((e) => e.key === clue.where);
     if (!place) continue;
     const mention = [place.name, ...place.aliases].join(", ");
-    const result = simulateActivation(pkg, [{ role: "user", content: `We look around ${mention}.` }], { activeCardKeys: cards });
+    const extra = home.secondary.length ? ` We check the ${home.secondary.join(" and the ")}.` : "";
+    const result = simulateActivation(pkg, [{ role: "user", content: `We look around ${mention}.${extra}` }], { activeCardKeys: cards });
     const hit = result.entries.find((x) => x.lorebookKey === home.lb && x.entryKey === home.key);
     if (hit?.status !== "activated") {
       findings.push({

@@ -342,6 +342,8 @@ export function buildStages(requirements: Requirements, plan: Plan | null): Stag
   stages.push({
     id: "audit",
     label: "Quality audit",
+    // 2: clue check honours selective entries' secondary keys.
+    version: "2",
     deps: ["assemble", "plan", "facts", ...(plan.isMystery ? ["clues"] : [])],
     run: (ctx) => {
       const p = ctx.output<Plan>("plan");

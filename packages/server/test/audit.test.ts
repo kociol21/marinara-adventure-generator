@@ -76,6 +76,30 @@ describe("code checks", () => {
     expect(found[0]!.fix).toContain('add "Old Pier"');
   });
 
+  it("accept a selective clue entry that waits for its place plus a second word", () => {
+    const plan = planSchema.parse({ ...fixture.plan, entities: [...fixture.plan.entities, { key: "pier", type: "location", name: "Old Pier", publicDescription: "A pier." }] });
+    const clues = {
+      conclusions: [{ id: "c1", statement: "x", factIds: [] }],
+      clues: [{ id: "k1", conclusionId: "c1", where: "pier", how: "under the planks", factId: "f9" }],
+      redHerrings: [],
+    };
+    const selective = pkgWith((p) => {
+      p.lorebooks[1]!.entries[1] = {
+        ...p.lorebooks[1]!.entries[1]!,
+        type: "selective",
+        keys: ["Old Pier"],
+        secondaryKeys: ["planks", "search"],
+        selectiveLogic: "and_any",
+        factIds: ["f9"],
+      };
+    });
+    expect(findUnreachableClues(selective, plan, clues)).toEqual([]);
+    const blocked = pkgWith((p) => {
+      p.lorebooks[1]!.entries[1] = { ...p.lorebooks[1]!.entries[1]!, keys: ["ledger"], factIds: ["f9"] };
+    });
+    expect(findUnreachableClues(blocked, plan, clues)).toHaveLength(1);
+  });
+
   it("write model finding summaries in code and drop unknown targets", () => {
     const targets = new Map([["card:alpha", "Card: Probe Alpha"]]);
     const [known, unknown] = toFindings(
