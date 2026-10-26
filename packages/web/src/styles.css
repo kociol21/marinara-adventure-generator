@@ -499,3 +499,69 @@ a.button {
 .confirm-dialog p {
   margin: 0 0 10px;
 }
+
+.panel > .subpanel:first-child {
+  border-top: 0;
+  margin-top: 0;
+  padding-top: 0;
+}
+
+.steps {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin: 20px 0 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.steps .step-tab {
+  border: 1px solid transparent;
+  border-bottom: 0;
+  border-radius: 8px 8px 0 0;
+  background: transparent;
+  color: var(--muted);
+  padding: 8px 14px;
+  margin-bottom: -1px;
+}
+
+.steps .step-tab.active {
+  background: var(--surface);
+  border-color: var(--border);
+  color: var(--text);
+  font-weight: 600;
+}
+
+.steps .step-tab:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.step-number {
+  display: inline-block;
+  min-width: 1.4em;
+  border-radius: 999px;
+  background: var(--border);
+  color: var(--text);
+  font-size: 0.8em;
+  text-align: center;
+  margin-right: 4px;
+}
+
+.steps .step-tab.active .step-number {
+  background: var(--accent);
+  color: var(--accent-text);
+}
+
+.step-mark {
+  margin-left: 6px;
+  font-size: 0.85em;
+}
+
+.steps + .panel {
+  margin-top: 0;
+  border-top-left-radius: 0;
+}
+
+.step-next {
+  justify-content: flex-end;
+}

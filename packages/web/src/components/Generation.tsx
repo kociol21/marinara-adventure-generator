@@ -15,7 +15,10 @@ const ICON: Record<StageView["status"], string> = {
   stale: "◌",
 };
 
-export function Generation({ projectId }: { projectId: string }) {
+/** One adventure step tab: generation progress, quality report, portraits or export (they share one state query). */
+export type GenerationView = "generation" | "audit" | "portraits" | "export";
+
+export function Generation({ projectId, view = "generation" }: { projectId: string; view?: GenerationView }) {
   const queryClient = useQueryClient();
   const key = ["generation", projectId];
   const state = useQuery({
@@ -68,6 +71,50 @@ export function Generation({ projectId }: { projectId: string }) {
     ).then((ok) => ok && run());
   };
 
+  if (view === "portraits") {
+    return (
+      <div className="panel">
+        <Portraits projectId={projectId} running={s.running} />
+      </div>
+    );
+  }
+
+  if (view === "audit") {
+    return (
+      <div className="panel">
+        {s.audit && !s.running ? (
+          <AuditReport
+            audit={s.audit}
+            busy={rerunAudit.isPending || retry.isPending}
+            onRerun={() => confirmRun("Run the quality audit again with a new set of automatic fix rounds?", () => rerunAudit.mutate())}
+            onRegeneratePlan={() =>
+              confirmRun(
+                "Regenerate the plan? This rewrites the whole adventure: plan, facts, clues, cards, persona, lorebooks and opening.",
+                () => retry.mutate("plan"),
+              )
+            }
+          />
+        ) : (
+          <p className="muted small">{s.running ? "The quality report appears when generation finishes." : "No quality report yet. It is made at the end of generation."}</p>
+        )}
+        {rerunAudit.isError && <p className="error">{rerunAudit.error.message}</p>}
+        {retry.isError && <p className="error">{retry.error.message}</p>}
+      </div>
+    );
+  }
+
+  if (view === "export") {
+    return (
+      <div className="panel">
+        {s.ready && !s.running ? (
+          <ExportPanel projectId={projectId} stamp={s.stages.map((st) => `${st.id}:${st.finishedAt}`).join("|")} />
+        ) : (
+          <p className="muted small">Export and Push to Marinara open once generation is finished.</p>
+        )}
+      </div>
+    );
+  }
+
   return (
     <div className="panel">
       <div className="card-header">
@@ -117,29 +164,6 @@ export function Generation({ projectId }: { projectId: string }) {
         ) : null}
       </div>
       {(start.isError || retry.isError) && <p className="error">{(start.error ?? retry.error)?.message}</p>}
-
-      <Portraits projectId={projectId} running={s.running} />
-
-      {s.audit && !s.running && (
-        <AuditReport
-          audit={s.audit}
-          busy={rerunAudit.isPending || retry.isPending}
-          onRerun={() =>
-            confirmRun("Run the quality audit again with a new set of automatic fix rounds?", () => rerunAudit.mutate())
-          }
-          onRegeneratePlan={() =>
-            confirmRun(
-              "Regenerate the plan? This rewrites the whole adventure: plan, facts, clues, cards, persona, lorebooks and opening.",
-              () => retry.mutate("plan"),
-            )
-          }
-        />
-      )}
-      {rerunAudit.isError && <p className="error">{rerunAudit.error.message}</p>}
-
-      {s.ready && !s.running && (
-        <ExportPanel projectId={projectId} stamp={s.stages.map((st) => `${st.id}:${st.finishedAt}`).join("|")} />
-      )}
 
       {s.ready && s.warnings.length > 0 && (
         <div className="assumptions">

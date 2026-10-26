@@ -30,6 +30,8 @@ export interface MarinaraClientOptions {
 
 export type MarinaraClient = ReturnType<typeof createMarinaraClient>;
 
+export type RemovableKind = "character" | "persona" | "lorebook" | "chat" | "character-folder" | "persona-folder" | "lorebook-folder";
+
 export function createMarinaraClient(options: MarinaraClientOptions) {
   const auth = options.credentials
     ? `Basic ${Buffer.from(`${options.credentials.username}:${options.credentials.password}`, "utf8").toString("base64")}`
@@ -176,13 +178,25 @@ export function createMarinaraClient(options: MarinaraClientOptions) {
       return { vectorized: Number(res?.vectorized ?? 0), total: Number(res?.total ?? 0) };
     },
 
+    /** A new library folder holding the given items (Characters, Personas and Lorebooks panels). */
+    async createFolder(kind: "character" | "persona" | "lorebook", name: string, itemIds: string[]): Promise<string> {
+      if (kind === "character") return idOf(await call("POST", "/api/characters/groups", { name, characterIds: itemIds }), "character folder");
+      if (kind === "persona") return idOf(await call("POST", "/api/characters/persona-groups", { name, personaIds: itemIds }), "persona folder");
+      const id = idOf(await call("POST", "/api/library-folders/lorebooks", { name }), "lorebook folder");
+      if (itemIds.length) await call("POST", "/api/library-folders/lorebooks/move", { itemIds, folderId: id });
+      return id;
+    },
+
     /** Removal of resources this client created, for rollback after a failed push. */
-    async remove(kind: "character" | "persona" | "lorebook" | "chat", id: string): Promise<void> {
+    async remove(kind: RemovableKind, id: string): Promise<void> {
       const path = {
         character: `/api/characters/${encodeURIComponent(id)}`,
         persona: `/api/characters/personas/${encodeURIComponent(id)}`,
         lorebook: `/api/lorebooks/${encodeURIComponent(id)}`,
         chat: `/api/chats/${encodeURIComponent(id)}`,
+        "character-folder": `/api/characters/groups/${encodeURIComponent(id)}`,
+        "persona-folder": `/api/characters/persona-groups/${encodeURIComponent(id)}`,
+        "lorebook-folder": `/api/library-folders/lorebooks/${encodeURIComponent(id)}`,
       }[kind];
       await call("DELETE", path);
     },

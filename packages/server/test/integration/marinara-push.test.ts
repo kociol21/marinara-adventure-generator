@@ -46,6 +46,7 @@ const fetchFn: FetchFn = async (input, init) => {
 
 let app: FastifyInstance;
 let record: PushRecord | null = null;
+const folders: string[] = [];
 
 describe.skipIf(!base)("Push to Marinara (local instance)", () => {
   afterAll(async () => {
@@ -57,6 +58,7 @@ describe.skipIf(!base)("Push to Marinara (local instance)", () => {
       if (chat.personaId) await marinara("DELETE", `/api/characters/personas/${chat.personaId}`);
       for (const id of (chat.metadata.activeLorebookIds ?? []) as string[]) await marinara("DELETE", `/api/lorebooks/${id}`);
     }
+    for (const path of folders) await marinara("DELETE", path);
     await app?.close();
   });
 
@@ -105,6 +107,20 @@ describe.skipIf(!base)("Push to Marinara (local instance)", () => {
     const memory = (await marinara("GET", `/api/agents/memory/director/${record.chatId}`)).memory;
     expect(memory.overarchingArc.description).toBe((fixture as any).opening.secretPlot.description);
     expect(memory.secretPlotLastAssistantMessageId).toBe(messages[0].id);
+
+    // Each panel got a folder named after the adventure holding exactly what was imported.
+    const holding = (list: any[], ids: string[]) =>
+      list.filter((f) => f.name === record!.chatName && ids.every((id) => JSON.stringify(f).includes(id)));
+    const characterFolders = holding(await marinara("GET", "/api/characters/groups/list"), chat.characterIds);
+    const personaFolders = holding(await marinara("GET", "/api/characters/persona-groups/list"), [chat.personaId]);
+    const lorebookFolders = holding(await marinara("GET", "/api/library-folders/lorebooks"), chat.metadata.activeLorebookIds);
+    folders.push(
+      ...characterFolders.map((f) => `/api/characters/groups/${f.id}`),
+      ...personaFolders.map((f) => `/api/characters/persona-groups/${f.id}`),
+      ...lorebookFolders.map((f) => `/api/library-folders/lorebooks/${f.id}`),
+    );
+    expect([characterFolders.length, personaFolders.length, lorebookFolders.length]).toEqual([1, 1, 1]);
+    expect(record.steps.find((s) => s.id === "folders")!.status).toBe("ok");
 
     // The record and the history carry no story text.
     const history = JSON.stringify((await app.inject({ method: "GET", url: `/api/projects/${id}/marinara/pushes`, headers: { host } })).json());

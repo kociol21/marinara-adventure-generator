@@ -23,6 +23,9 @@ function fakeMarinara(options: { director?: boolean; failOn?: string } = {}) {
     "PATCH /api/chats/chat-1/metadata": (req) => (Object.assign(meta, req.body), { json: {} }),
     "POST /api/chats/chat-1/messages": () => fail("message") ?? { json: { id: "msg-1" } },
     "POST /api/chats": () => ({ json: { id: "chat-1" } }),
+    "POST /api/characters/groups": () => fail("folders") ?? { json: { id: "cf-1" } },
+    "POST /api/characters/persona-groups": () => ({ json: { id: "pf-1" } }),
+    "POST /api/library-folders/lorebooks": () => ({ json: { id: "lf-1" } }),
     "GET /api/chats/chat-1": () => ({ json: { id: "chat-1", metadata: meta } }),
     "PATCH /api/agents/memory/director/chat-1": (req) => ((memory = { ...memory, ...(req.body as { patch: object }).patch }), { json: { memory } }),
     "GET /api/agents/memory/director/chat-1": () => ({ json: { memory } }),
@@ -46,6 +49,7 @@ describe("Push to Marinara", () => {
       "characters:ok",
       "persona:ok",
       "lorebooks:ok",
+      "folders:ok",
       "chat:ok",
       "settings:ok",
       "opening:ok",
@@ -58,6 +62,12 @@ describe("Push to Marinara", () => {
     // The opening card is listed first; the persona is selected.
     expect(chat.body).toMatchObject({ mode: "roleplay", characterIds: ["imp-1", "imp-2"], personaId: "imp-3" });
     expect(fake.requests.every((r) => r.headers.authorization === `Basic ${Buffer.from("u:pass-word-123").toString("base64")}`)).toBe(true);
+    // One folder per panel, named after the adventure, holding what was imported.
+    const folder = (path: string) => fake.requests.find((r) => r.method === "POST" && r.url.endsWith(path))!.body;
+    expect(folder("/api/characters/groups")).toEqual({ name: pkg().title, characterIds: ["imp-1", "imp-2"] });
+    expect(folder("/api/characters/persona-groups")).toEqual({ name: pkg().title, personaIds: ["imp-3"] });
+    expect(folder("/api/library-folders/lorebooks")).toEqual({ name: pkg().title });
+    expect(folder("/api/library-folders/lorebooks/move")).toEqual({ itemIds: ["imp-4", "imp-5"], folderId: "lf-1" });
     // The record is safe to store and show: no story text.
     expect(JSON.stringify(record)).not.toMatch(/SECRET_|ALPHA_FIRST_MESSAGE/);
   });
@@ -107,15 +117,26 @@ describe("Push to Marinara", () => {
     expect(record.chatId).toBeNull();
     expect(record.steps.find((s) => s.id === "opening")!.status).toBe("failed");
     expect(record.steps.find((s) => s.id === "characters")!.status).toBe("undone");
-    expect(record.steps.at(-1)).toMatchObject({ id: "rollback", status: "ok", detail: "6 created resources removed" });
+    expect(record.steps.at(-1)).toMatchObject({ id: "rollback", status: "ok", detail: "9 created resources removed" });
     expect(fake.requests.filter((r) => r.method === "DELETE").map((r) => r.url.replace(BASE, ""))).toEqual([
       "/api/chats/chat-1",
+      "/api/library-folders/lorebooks/lf-1",
+      "/api/characters/persona-groups/pf-1",
+      "/api/characters/groups/cf-1",
       "/api/lorebooks/imp-5",
       "/api/lorebooks/imp-4",
       "/api/characters/personas/imp-3",
       "/api/characters/imp-2",
       "/api/characters/imp-1",
     ]);
+  });
+
+  it("still pushes when Marinara refuses a folder, and says so", async () => {
+    const fake = fakeMarinara({ failOn: "folders" });
+    const record = await pushToMarinara(client(fake), BASE, pkg(), {}, opts);
+    expect(record.status).toBe("done");
+    expect(record.steps.find((s) => s.id === "folders")).toMatchObject({ status: "failed" });
+    expect(record.steps.find((s) => s.id === "folders")!.detail).toContain("2 folder(s) made");
   });
 
   it("builds vectors when asked, and keeps the chat when vectorizing fails", async () => {

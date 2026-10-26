@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import type { AdventurePackage, PushRecord, PushStep } from "@adv/shared";
-import { MarinaraError, type MarinaraClient } from "./client.ts";
+import { MarinaraError, type MarinaraClient, type RemovableKind } from "./client.ts";
 import { buildExport, type ExportOptions } from "./export.ts";
 import { toNative } from "./native.ts";
 
@@ -24,7 +24,7 @@ export interface PushOptions {
 
 export class PushRefusedError extends Error {}
 
-type Created = { kind: "character" | "persona" | "lorebook" | "chat"; id: string };
+type Created = { kind: RemovableKind; id: string };
 
 export async function pushToMarinara(
   client: MarinaraClient,
@@ -104,6 +104,32 @@ export async function pushToMarinara(
         lorebookIds.set(lorebook.key, id);
       }
       return { value: null, detail: `${lorebookIds.size} lorebooks, ${pkg.lorebooks.reduce((n, lb) => n + lb.entries.length, 0)} entries` };
+    });
+
+    // One folder per library panel, named after the adventure. Only tidiness: a Marinara without
+    // folders (or a refused one) still gets a playable chat, so failure here is reported, not fatal.
+    const folders = { ok: 0, failed: [] as string[] };
+    const folderSets: Array<["character" | "persona" | "lorebook", string[]]> = [
+      ["character", [...characterIds.values()]],
+      ["persona", personaId ? [personaId] : []],
+      ["lorebook", [...lorebookIds.values()]],
+    ];
+    for (const [kind, ids] of folderSets) {
+      if (!ids.length) continue;
+      try {
+        created.push({ kind: `${kind}-folder`, id: await client.createFolder(kind, pkg.title, ids) });
+        folders.ok++;
+      } catch (error) {
+        folders.failed.push(`${kind}s: ${error instanceof Error ? error.message : "unexpected error"}`);
+      }
+    }
+    steps.push({
+      id: "folders",
+      label: "Put them in folders",
+      status: folders.failed.length ? "failed" : "ok",
+      detail: folders.failed.length
+        ? `${folders.ok} folder(s) made; not made: ${folders.failed.join("; ")}. The chat still works.`
+        : `"${pkg.title}" in Characters, Personas and Lorebooks`,
     });
 
     // The opening card first, like the roleplay setup in START-HERE.
