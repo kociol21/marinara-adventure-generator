@@ -182,6 +182,43 @@ describe("generation pipeline", () => {
     expect(stageCalls().slice(before)).toEqual(["card:alpha"]);
   });
 
+  it("edits one part to follow the player's request and keeps earlier requests", async () => {
+    const { id, stageCalls, requests } = await setup();
+    await runToEnd(id);
+    const retry = (note: string) =>
+      app.inject({ method: "POST", url: `/api/projects/${id}/generation/stages/opening/retry`, headers: write, payload: { confirmUsage: true, note } });
+    const before = stageCalls().length;
+    expect((await retry("  More humour, please.  ")).statusCode).toBe(200);
+    await pipeline().idle(id);
+    // The fixture returns the same opening, so nothing downstream changes.
+    expect(stageCalls().slice(before)).toEqual(["opening"]);
+    const prompt = () => (requests.at(-1)!.body as { messages: Array<{ content: string }> }).messages[0]!.content;
+    expect(prompt()).toContain("REVISION of your previous output, at the player's request.");
+    expect(prompt()).toContain("Change now:\n- More humour, please.");
+    expect(prompt()).toContain("PREVIOUS OUTPUT");
+
+    expect((await retry("Shorter.")).statusCode).toBe(200);
+    await pipeline().idle(id);
+    expect(prompt()).toContain("Change now:\n- Shorter.");
+    expect(prompt()).toContain("Already fixed in earlier revisions (keep them fixed):\n- More humour, please.");
+    const state = (await app.inject({ method: "GET", url: `/api/projects/${id}/generation`, headers: { host } })).json() as GenerationState;
+    expect(state.ready).toBe(true);
+    expect(state.stages.find((s) => s.id === "opening")).toMatchObject({ acceptsNote: true, playerNotes: ["More humour, please.", "Shorter."] });
+    expect(state.stages.find((s) => s.id === "assemble")?.acceptsNote).toBe(false);
+  });
+
+  it("refuses notes for stages the model does not write", async () => {
+    const { id } = await setup();
+    await runToEnd(id);
+    const res = await app.inject({
+      method: "POST",
+      url: `/api/projects/${id}/generation/stages/assemble/retry`,
+      headers: write,
+      payload: { confirmUsage: true, note: "Anything" },
+    });
+    expect(res.statusCode).toBe(400);
+  });
+
   it("writes a new title on request without touching the package, and avoids the replaced one", async () => {
     const { id, stageCalls, requests } = await setup((stage, _sub, attempt) =>
       stage === "title" && attempt > 1 ? JSON.stringify({ title: "Salt and Lamplight" }) : undefined,

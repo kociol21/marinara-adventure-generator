@@ -7,7 +7,7 @@ import type { SettingsRepo } from "../repos/settings.ts";
 import type { StageRow, StagesRepo } from "../repos/stages.ts";
 import { GenerationError, type TextGenerator } from "../generation/text.ts";
 import { PROMPT_VERSION } from "./prompts.ts";
-import { buildStages, FIXABLE_STAGE, type AvatarOutput, PackageInvalidError, retitle, type AssembleOutput, type StageContext, type StageDef } from "./stages.ts";
+import { buildStages, FIXABLE_STAGE, NOTE_STAGE, type AvatarOutput, PackageInvalidError, retitle, type AssembleOutput, type StageContext, type StageDef } from "./stages.ts";
 import type { AuditOutput } from "../audit/units.ts";
 import { describeTrials, runActivationTrials } from "../audit/activation-trials.ts";
 import type { Embedder } from "../generation/embeddings.ts";
@@ -65,8 +65,18 @@ export function createPipeline(deps: Deps) {
     });
   }
 
-  type Notes = Map<string, Array<{ round: number; note: string }>>;
+  type Notes = Map<string, Array<{ round: number; note: string; player?: boolean; createdAt?: string }>>;
   const NO_NOTES: Notes = new Map();
+
+  /** Audit notes and the player's requests, both part of a stage's hash. */
+  function notesOf(projectId: string, hashBase: string): Notes {
+    const notes: Notes = deps.stages.notes(projectId, hashBase);
+    for (const [stage, list] of deps.stages.playerNotes(projectId)) {
+      const own = list.map((n) => ({ round: 0, note: `player: ${n.note}`, player: true, createdAt: n.createdAt }));
+      notes.set(stage, [...(notes.get(stage) ?? []), ...own]);
+    }
+    return notes;
+  }
 
   function inputHash(def: StageDef, hashBase: string, title: string, rows: Map<string, StageRow>, notes: Notes): string {
     // Version and audit notes join the hash only when present, so existing stage hashes stay valid.
@@ -158,7 +168,8 @@ export function createPipeline(deps: Deps) {
     }
     const hashBase = sha(current.requirements);
     const defs = definitions(projectId, current.requirements, rows);
-    const notes = deps.stages.notes(projectId, hashBase);
+    const notes = notesOf(projectId, hashBase);
+    const player = deps.stages.playerNotes(projectId);
     const calls = deps.stages.callCounts(projectId);
     const stages: StageView[] = defs.map((def) => {
       const row = rows.get(def.id);
@@ -173,6 +184,8 @@ export function createPipeline(deps: Deps) {
         attempts: row?.attempts ?? 0,
         calls: calls.get(def.id) ?? 0,
         finishedAt: row?.finishedAt ?? null,
+        acceptsNote: NOTE_STAGE.test(def.id),
+        playerNotes: (player.get(def.id) ?? []).map((n) => n.note),
       };
     });
     const assembled = rows.get("assemble");
@@ -244,7 +257,7 @@ export function createPipeline(deps: Deps) {
       }
       const rows = deps.stages.all(projectId);
       const defs = definitions(projectId, requirements, rows);
-      const notes = deps.stages.notes(projectId, hashBase);
+      const notes = notesOf(projectId, hashBase);
       if (rows.get("plan")?.status === "done") deps.stages.prune(projectId, defs.map((d) => d.id));
       const next = defs.find((def) => !isCurrent(def, hashBase, project.title, rows, notes));
       if (!next) {
@@ -282,7 +295,14 @@ export function createPipeline(deps: Deps) {
           const def = defs.find((d) => d.id === id);
           // Edit the previous output only when nothing but the notes changed since it was written.
           const sameBase = !!def && !!row?.output && row.baseHash === inputHash(def, hashBase, project.title, rows, NO_NOTES);
-          return { notes: stageNotes, previous: sameBase ? row!.output : null };
+          const own = stageNotes.filter((n) => n.player);
+          const isNew = (n: (typeof own)[number]) => !row?.finishedAt || (n.createdAt ?? "") > row.finishedAt;
+          const text = (n: (typeof own)[number]) => n.note.slice("player: ".length);
+          return {
+            notes: stageNotes.filter((n) => !n.player).map(({ round, note }) => ({ round, note })),
+            player: { now: own.filter(isNew).map(text), earlier: own.filter((n) => !isNew(n)).map(text) },
+            previous: sameBase ? row!.output : null,
+          };
         },
         rejectedTitles: deps.projects.rejectedNames(projectId),
         embedder: deps.embedder ?? null,
@@ -343,15 +363,20 @@ export function createPipeline(deps: Deps) {
       return state(projectId);
     },
 
-    /** Regenerate one stage (and, through the hashes, whatever depends on it). */
-    retry(projectId: string, stageId: string): GenerationState {
+    /**
+     * Regenerate one stage (and, through the hashes, whatever depends on it). With a player note
+     * the stage edits its previous output to follow the note instead of starting over.
+     */
+    retry(projectId: string, stageId: string, note?: string): GenerationState {
       if (jobs.has(projectId)) throw new PipelineError("Generation is already running.", 409);
       const rows = deps.stages.all(projectId);
       if (!rows.has(stageId)) throw new PipelineError("Unknown stage.", 404);
+      if (note && !NOTE_STAGE.test(stageId)) throw new PipelineError("This stage does not take notes.", 400);
       // A new title must differ from the one the player is replacing.
       const replaced = stageId === "title" ? (rows.get("title")?.output as TitleOutput | null)?.title : null;
       if (replaced) deps.projects.rejectName(projectId, replaced);
-      deps.stages.invalidate(projectId, stageId);
+      if (note) deps.stages.addPlayerNote(projectId, stageId, note);
+      else deps.stages.invalidate(projectId, stageId);
       // A deliberate rewrite must not be swapped back for an earlier, better-scored version.
       deps.stages.clearJudgeBest(projectId, stageId === "plan" ? null : stageId);
       return start(projectId);

@@ -209,6 +209,20 @@ export function createStagesRepo(db: Db) {
       ).run(projectId, basis, this.lastRound(projectId, basis));
     },
 
+    /** The player's change requests per stage, oldest first. */
+    playerNotes(projectId: string): Map<string, Array<{ note: string; createdAt: string }>> {
+      const rows = db
+        .prepare("SELECT stage, note, created_at FROM player_note WHERE project_id = ? ORDER BY id")
+        .all(projectId) as Array<{ stage: string; note: string; created_at: string }>;
+      const out = new Map<string, Array<{ note: string; createdAt: string }>>();
+      for (const r of rows) out.set(r.stage, [...(out.get(r.stage) ?? []), { note: r.note, createdAt: r.created_at }]);
+      return out;
+    },
+
+    addPlayerNote(projectId: string, stage: string, note: string): void {
+      db.prepare("INSERT INTO player_note (project_id, stage, note, created_at) VALUES (?, ?, ?, ?)").run(projectId, stage, note, new Date().toISOString());
+    },
+
     addNotes(projectId: string, basis: string, round: number, notes: Array<{ stage: string; note: string }>): void {
       const insert = db.prepare("INSERT INTO stage_note (project_id, basis, stage, round, note, created_at) VALUES (?, ?, ?, ?, ?, ?)");
       const now = new Date().toISOString();

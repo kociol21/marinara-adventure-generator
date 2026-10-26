@@ -1,5 +1,5 @@
 import type { FastifyPluginAsync, FastifyReply } from "fastify";
-import { startGenerationSchema } from "@adv/shared";
+import { retryStageSchema, startGenerationSchema } from "@adv/shared";
 import { PipelineError, type Pipeline } from "../pipeline/runner.ts";
 import { buildExport, buildExportZip, ExportBlockedError, SecretLeakError } from "../marinara/export.ts";
 import type { SecretsRepo } from "../repos/secrets.ts";
@@ -32,9 +32,9 @@ export const generationRoutes: FastifyPluginAsync<{ pipeline: Pipeline; secrets:
   app.post<{ Params: { id: string } }>("/:id/generation/cancel", async (req) => pipeline.cancel(req.params.id));
 
   app.post<{ Params: { id: string; stage: string } }>("/:id/generation/stages/:stage/retry", async (req, reply) => {
-    startGenerationSchema.parse(req.body);
+    const { note } = retryStageSchema.parse(req.body);
     try {
-      return pipeline.retry(req.params.id, req.params.stage);
+      return pipeline.retry(req.params.id, req.params.stage, note);
     } catch (error) {
       return fail(reply, error);
     }

@@ -21,6 +21,7 @@ It checks its own work and hands the result to Marinara, either as a single clic
 1. **Interview without spoilers.** You write a short pitch and pick from short multiple-choice questions: genre, tone, narration style, content limits, the hero, the starting situation and so on. Defaults are visible and you can edit them. The summary you approve contains only things you chose yourself.
 2. **Generation in stages.** The model first writes a hidden plan, a fact registry and clues. Then it writes each card, the persona, each lorebook and the opening as separate steps. Code checks the steps against each other and repairs them a limited number of times.
    - Every stage can be resumed or regenerated on its own.
+   - When you regenerate a stage you can add a change request, such as "more humour" or "a less obvious culprit". That part is edited to follow it, without you seeing the story, and your requests stay applied in later rounds.
    - The progress view shows stage names and counts, never the content.
 3. **Quality audit.**
    - Code checks catch passages copied between files, secrets that leak into visible text, and clues the player can never reach.

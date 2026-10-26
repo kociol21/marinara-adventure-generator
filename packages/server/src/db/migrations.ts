@@ -192,4 +192,16 @@ export const migrations: string[] = [
   ALTER TABLE llm_call ADD COLUMN quota_tokens INTEGER;
   ALTER TABLE llm_call ADD COLUMN estimated INTEGER NOT NULL DEFAULT 0;
   `,
+  `
+  -- The player's own change requests for a stage ("make the opening funnier"). Written without
+  -- seeing the story; they join the stage's hash like audit notes and survive new fix sessions.
+  CREATE TABLE player_note (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    project_id  TEXT NOT NULL REFERENCES project(id) ON DELETE CASCADE,
+    stage       TEXT NOT NULL,
+    note        TEXT NOT NULL,
+    created_at  TEXT NOT NULL
+  );
+  CREATE INDEX player_note_project ON player_note(project_id);
+  `,
 ];

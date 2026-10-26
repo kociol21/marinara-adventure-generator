@@ -1037,6 +1037,24 @@ section > form.row:first-of-type {
   margin: 0 0 12px;
 }
 
+.note-field {
+  margin: 4px 0 14px;
+}
+
+.note-field ul {
+  margin: 4px 0 10px;
+  padding-left: 20px;
+}
+
+.note-field textarea {
+  width: 100%;
+  resize: vertical;
+}
+
+.note-field .muted {
+  margin-top: 6px;
+}
+
 /* ── Small screens ── */
 
 @media (max-width: 640px) {

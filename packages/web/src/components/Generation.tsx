@@ -5,7 +5,7 @@ import { api } from "../api.ts";
 import { AuditReport } from "./AuditReport.tsx";
 import { ExportPanel } from "./ExportPanel.tsx";
 import { Portraits } from "./Portraits.tsx";
-import { askConfirm } from "./ConfirmDialog.tsx";
+import { askConfirm, askConfirmWithNote } from "./ConfirmDialog.tsx";
 import { UsagePanel, estimateText } from "./Usage.tsx";
 
 const ICON: Record<StageView["status"], string> = {
@@ -49,8 +49,13 @@ export function Generation({ projectId, view = "generation" }: { projectId: stri
     onSuccess: after,
   });
   const retry = useMutation({
-    mutationFn: (stage: string) =>
-      api.post<GenerationState>(`/projects/${projectId}/generation/stages/${encodeURIComponent(stage)}/retry`, { confirmUsage: true }),
+    mutationFn: (stage: string | { stage: string; note: string }) => {
+      const { stage: id, note } = typeof stage === "string" ? { stage, note: "" } : stage;
+      return api.post<GenerationState>(`/projects/${projectId}/generation/stages/${encodeURIComponent(id)}/retry`, {
+        confirmUsage: true,
+        ...(note ? { note } : {}),
+      });
+    },
     onSuccess: after,
   });
 
@@ -75,10 +80,15 @@ export function Generation({ projectId, view = "generation" }: { projectId: stri
   const started = s.stages.some((st) => st.status !== "pending");
   const failed = s.stages.find((st) => st.status === "failed");
 
+  const usageText = (what: string, forecast?: string | null) =>
+    `${what} ${forecast ? `${forecast} ` : ""}Each stage is one or more requests to your Text generation model and uses quota or credits. The quality audit adds two requests per round and may regenerate parts with major findings, up to the automatic fix limit in Settings. With a decision model assigned, it also scores every part once per round and may ask for more rounds, up to the judge's limit.`;
   const confirmRun = (what: string, run: () => void, forecast?: string | null) => {
-    void askConfirm(
-      `${what} ${forecast ? `${forecast} ` : ""}Each stage is one or more requests to your Text generation model and uses quota or credits. The quality audit adds two requests per round and may regenerate parts with major findings, up to the automatic fix limit in Settings. With a decision model assigned, it also scores every part once per round and may ask for more rounds, up to the judge's limit.`,
-    ).then((ok) => ok && run());
+    void askConfirm(usageText(what, forecast)).then((ok) => ok && run());
+  };
+  const regenerate = (st: StageView) => {
+    const what = `Regenerate "${st.label}" and what depends on it?`;
+    if (!st.acceptsNote) return confirmRun(what, () => retry.mutate(st.id));
+    void askConfirmWithNote(usageText(what), st.playerNotes).then((note) => note !== null && retry.mutate({ stage: st.id, note }));
   };
 
   if (view === "portraits") {
@@ -168,11 +178,12 @@ export function Generation({ projectId, view = "generation" }: { projectId: stri
             <span className="muted small">
               {st.status === "done" && st.summary}
               {st.status === "done" && st.calls > 1 && ` · ${st.calls} requests (${st.calls - 1} ${st.calls === 2 ? "fix" : "fixes"})`}
+              {st.playerNotes.length > 0 && ` · ${st.playerNotes.length} ${st.playerNotes.length === 1 ? "request" : "requests"} from you`}
               {st.status === "stale" && "out of date, will be regenerated"}
               {st.status === "running" && "working…"}
             </span>
             {!s.running && (st.status === "done" || st.status === "failed") && st.id !== "assemble" && (
-              <button className="secondary small-button" onClick={() => confirmRun(`Regenerate "${st.label}" and what depends on it?`, () => retry.mutate(st.id))}>
+              <button className="secondary small-button" onClick={() => regenerate(st)}>
                 Regenerate
               </button>
             )}

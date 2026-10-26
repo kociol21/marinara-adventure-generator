@@ -47,7 +47,7 @@ export interface StageContext {
    * Audit fix notes for a stage, oldest first, and its previous output when only the notes changed
    * since that output was written (then the stage edits it instead of starting over).
    */
-  revision(stageId: string): { notes: Array<{ round: number; note: string }>; previous: unknown };
+  revision(stageId: string): { notes: Array<{ round: number; note: string }>; player: PlayerNotes; previous: unknown };
   /** Titles the player replaced; the title stage avoids them. */
   rejectedTitles: string[];
   embedder: Embedder | null;
@@ -55,6 +55,12 @@ export interface StageContext {
   judgeThreshold: number;
   images: ImageGenerator | null;
   portraits: { settings: PortraitSettings; dir: string };
+}
+
+/** The player's change requests: new since the stage last ran, and earlier ones already applied. */
+export interface PlayerNotes {
+  now: string[];
+  earlier: string[];
 }
 
 export interface PortraitOptions {
@@ -84,8 +90,8 @@ function llmStage<S extends z.ZodType>(
   system: string,
   check?: (value: z.infer<S>) => string[],
 ): Promise<z.infer<S>> {
-  const { notes, previous } = ctx.revision(purpose);
-  const revised = notes.length ? `${system}\n\n${revisionBlock(notes, previous)}` : system;
+  const { notes, player, previous } = ctx.revision(purpose);
+  const revised = notes.length || player.now.length || player.earlier.length ? `${system}\n\n${revisionBlock(notes, previous, player)}` : system;
   return ctx.text.generateJson(schema, { projectId: ctx.projectId, purpose, system: revised, messages: KICKOFF }, ctx.repairAttempts, check);
 }
 
@@ -93,22 +99,37 @@ function llmStage<S extends z.ZodType>(
  * Fixes edit the previous version when possible. Regenerating a whole lorebook to fix one entry
  * produced new problems every round (first real audit: no convergence after two rounds).
  */
-export function revisionBlock(notes: Array<{ round: number; note: string }>, previous: unknown): string {
-  const latest = Math.max(...notes.map((n) => n.round));
-  const now = notes.filter((n) => n.round === latest).map((n) => `- ${n.note}`);
-  const earlier = notes.filter((n) => n.round !== latest).map((n) => `- ${n.note}`);
+export function revisionBlock(
+  notes: Array<{ round: number; note: string }>,
+  previous: unknown,
+  player: PlayerNotes = { now: [], earlier: [] },
+): string {
+  const latest = notes.length ? Math.max(...notes.map((n) => n.round)) : 0;
+  // A new player request is what this run is for; audit notes from before it are already applied.
+  const byPlayer = player.now.length > 0;
+  const now = byPlayer ? [] : notes.filter((n) => n.round === latest).map((n) => `- ${n.note}`);
+  const earlier = notes.filter((n) => byPlayer || n.round !== latest).map((n) => `- ${n.note}`);
+  const playerNow = player.now.map((n) => `- ${n}`);
+  const playerEarlier = player.earlier.map((n) => `- ${n}`);
+  const playerIntro = `The player asked for this change without reading the adventure. Do it in the spirit of the request, keep the story consistent with everything else you were given, and never address the player or mention the request in the output.`;
   if (previous) {
-    return `REVISION of your previous output, after a quality audit.
-Return the COMPLETE JSON again, changing ONLY what the notes below require. Keep every other entry and field exactly as it was: same keys, same names, same wording, same order. Do not rewrite, merge or reorder anything the notes do not mention.
-Fix now:
-${now.join("\n")}${earlier.length ? `\nAlready fixed in earlier revisions (keep them fixed):\n${earlier.join("\n")}` : ""}
+    const keep = [...earlier, ...playerEarlier];
+    return `REVISION of your previous output, ${byPlayer ? "at the player's request" : "after a quality audit"}.
+Return the COMPLETE JSON again, changing ONLY what the ${byPlayer ? "request" : "notes"} below require${byPlayer ? "s" : ""}. Keep every other entry and field exactly as it was: same keys, same names, same wording, same order. Do not rewrite, merge or reorder anything the ${byPlayer ? "request does" : "notes do"} not mention.
+${byPlayer ? `${playerIntro}\nChange now:\n${playerNow.join("\n")}` : `Fix now:\n${now.join("\n")}`}${keep.length ? `\nAlready fixed in earlier revisions (keep them fixed):\n${keep.join("\n")}` : ""}
 
 PREVIOUS OUTPUT
 ${JSON.stringify(previous)}`;
   }
-  return `NOTES from a quality audit of an earlier version. Make sure these problems do not occur:
-${[...now, ...earlier].join("\n")}`;
+  const blocks: string[] = [];
+  if (notes.length) blocks.push(`NOTES from a quality audit of an earlier version. Make sure these problems do not occur:\n${[...now, ...earlier].join("\n")}`);
+  if (playerNow.length || playerEarlier.length) blocks.push(`REQUESTS from the player. ${playerIntro}\n${[...playerEarlier, ...playerNow].join("\n")}`);
+  return blocks.join("\n\n");
 }
+
+/** Stages the player may send a change request to: everything written by the text model. */
+export const NOTE_STAGE = /^(plan|facts|clues|card:[a-z0-9-]+|persona|lorebook:[a-z]+|opening|title)$/;
+export const MAX_PLAYER_NOTE = 1000;
 
 /** Stages the audit may send fix notes to: renderings only. Plan and facts would cascade into everything. */
 export const FIXABLE_STAGE = /^(card:[a-z0-9-]+|persona|lorebook:[a-z]+|opening)$/;

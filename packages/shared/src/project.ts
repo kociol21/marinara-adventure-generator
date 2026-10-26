@@ -33,6 +33,10 @@ export interface StageView {
   /** Model requests in the latest run of this stage, repairs included. */
   calls: number;
   finishedAt: string | null;
+  /** The player may send this stage a change request. */
+  acceptsNote: boolean;
+  /** The player's own requests for this stage, oldest first. */
+  playerNotes: string[];
 }
 
 export interface GenerationState {
@@ -51,6 +55,9 @@ export interface GenerationState {
 }
 
 export const startGenerationSchema = z.object({ confirmUsage: z.literal(true) });
+
+/** Regenerate a stage, optionally with the player's change request ("make the opening funnier"). */
+export const retryStageSchema = startGenerationSchema.extend({ note: z.string().trim().min(1).max(1000).optional() });
 
 export const createProjectSchema = z.object({
   title: z.string().trim().min(1).max(200),
