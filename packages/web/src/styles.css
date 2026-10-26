@@ -192,6 +192,16 @@ code {
   background: color-mix(in srgb, var(--gold) 20%, transparent);
 }
 
+.topbar .new-adventure {
+  padding: 5px 14px;
+  font-size: 0.85rem;
+}
+
+.library-search {
+  width: 100%;
+  margin-bottom: 18px;
+}
+
 .status {
   color: var(--muted);
   font-size: 0.8rem;
