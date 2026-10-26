@@ -31,7 +31,7 @@ import {
   titleSchema,
   type TitleOutput,
 } from "./schemas.ts";
-import { cardPrompt, cluesPrompt, factsPrompt, lorebookPrompt, narrativeVoiceEntry, openingPrompt, personaPrompt, planPrompt, titlePrompt } from "./prompts.ts";
+import { cardPrompt, cluePlaces, cluesPrompt, factsPrompt, lorebookPrompt, narrativeVoiceEntry, openingPrompt, personaPrompt, planPrompt, titlePrompt } from "./prompts.ts";
 import { z } from "zod";
 import { scaleTargets, wordCount } from "./scale.ts";
 
@@ -216,18 +216,23 @@ export function checkClues(clues: Clues, plan: Plan, facts: Facts): string[] {
  */
 export function checkClueEntries(out: LorebookOutput, clues: Clues, plan: Plan): string[] {
   const problems: string[] = [];
-  const entryOf = new Map<string, LorebookOutput["entries"][number]>();
-  for (const e of out.entries) for (const id of e.factIds) entryOf.set(id, e);
+  const placesOf = cluePlaces(clues, plan);
   const placesByEntry = new Map<string, Set<string>>();
-  for (const clue of clues.clues) {
-    if (!clue.factId) continue;
-    const entry = entryOf.get(clue.factId);
-    const place = plan.entities.find((x) => x.key === clue.where);
-    if (!entry || !place) continue;
-    placesByEntry.set(entry.key, (placesByEntry.get(entry.key) ?? new Set()).add(place.key));
-    const names = [place.name, ...place.aliases].map((n) => n.toLowerCase());
-    const keyed = entry.keys.some((k) => names.some((n) => k.toLowerCase().includes(n) || n.includes(k.toLowerCase())));
-    if (!keyed) problems.push(`entry "${entry.key}" holds clue ${clue.id} found at "${place.name}" but has no key for ${place.name}; key it on the place where the clue is found`);
+  for (const entry of out.entries) {
+    for (const factId of entry.factIds) {
+      const places = placesOf.get(factId);
+      if (!places) continue;
+      // A fact whose clues surface at several places may sit with any one of them.
+      const place = places.find((p) => {
+        const names = [p.name, ...p.aliases].map((n) => n.toLowerCase());
+        return entry.keys.some((k) => names.some((n) => k.toLowerCase().includes(n) || n.includes(k.toLowerCase())));
+      });
+      placesByEntry.set(entry.key, (placesByEntry.get(entry.key) ?? new Set()).add((place ?? places[0]!).key));
+      if (!place) {
+        const names = places.map((p) => p.name).join(" or ");
+        problems.push(`entry "${entry.key}" holds clue fact ${factId} found at ${names} but has no key for ${names}; key it on the place where the clue is found`);
+      }
+    }
   }
   for (const [entryKey, places] of placesByEntry) {
     if (places.size > 1) problems.push(`entry "${entryKey}" mixes clues from ${places.size} places (${[...places].join(", ")}); split it into one entry per place`);
@@ -406,6 +411,7 @@ export function buildStages(requirements: Requirements, plan: Plan | null, portr
         decider: ctx.decider,
         judgeThreshold: ctx.judgeThreshold,
         repairAttempts: ctx.repairAttempts,
+        previous: ctx.previousOutput<AuditOutput>("audit"),
       });
     },
     summary: (o) => {

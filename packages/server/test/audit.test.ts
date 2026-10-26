@@ -10,6 +10,7 @@ import { toFindings } from "../src/audit/review.ts";
 import { textUnits } from "../src/audit/units.ts";
 import { factSchema, lorebookOutputSchema, planSchema } from "../src/pipeline/schemas.ts";
 import { checkClueEntries } from "../src/pipeline/stages.ts";
+import { lorebookPrompt } from "../src/pipeline/prompts.ts";
 import { fakeFetch, type RecordedRequest } from "./fake-fetch.ts";
 import { readZip } from "./zip-reader.ts";
 import { probeInput } from "./fixtures/probe-package.ts";
@@ -152,6 +153,17 @@ describe("code checks", () => {
       plan,
     );
     expect(good).toEqual([]);
+
+    // One fact whose clues surface at two places may sit with either of them.
+    const shared = { ...clues, clues: [...clues.clues, { id: "k3", conclusionId: "c1", where: "office", how: "c", factId: "f1" }] };
+    expect(checkClueEntries({ entries: [entry("harbor-clues", ["Probe Harbor"], ["f1"]), entry("office-clues", ["Probe Office"], ["f2"])] }, shared, plan)).toEqual([]);
+    expect(checkClueEntries({ entries: [entry("office-clues", ["Probe Office"], ["f1", "f2"])] }, shared, plan)).toEqual([]);
+
+    // The prompt hands the model the grouping ready-made.
+    const fact = (id: string) =>
+      factSchema.parse({ id, subject: "harbor", statement: "x", layer: "truth", secrecy: "hidden", home: { kind: "lorebook", lorebook: "plot" } });
+    const prompt = lorebookPrompt(requirements, plan, "plot", [fact("f1"), fact("f2")], shared);
+    expect(prompt).toMatch(/CLUE MAP \(place: fact ids\)\n- Probe Harbor[^\n]*: f1\n- Probe Office[^\n]*: f2/);
   });
 });
 
@@ -378,6 +390,30 @@ describe("decision-model judge", () => {
     expect(prompts).toHaveLength(5);
     expect(prompts[1]).toContain("Genre: the answer to");
     expect(prompts[1]).toContain("Keep every fact, name, clue, secret and relationship unchanged");
+  });
+
+  it("re-checks only the parts a fix round changed and keeps the rest", async () => {
+    const { id, requests } = await setup({
+      varyBeta: true,
+      decide: (part, v, q) => answers(q, part === "card:beta" && v === 0 ? 0.3 : 0.9),
+    });
+    const state = await run(id);
+    const parts = state.audit!.judge!.parts.length;
+    expect(state.audit!.fixRounds).toBe(1);
+    expect(state.audit!.judge!.parts.every((p) => p.pass)).toBe(true);
+    // First audit scores every part; after Beta's rewrite only Beta is scored again.
+    expect(decisions(requests)).toHaveLength(parts + 1);
+    const reviews = requests.filter((r) => r.url.includes("chat/completions") && stageOf(r).stage === "audit-review").map((r) => stageOf(r).system);
+    expect(reviews).toHaveLength(2);
+    expect(reviews[0]).not.toContain("RE-CHECK");
+    expect(reviews[0]).toContain("### card:alpha");
+    expect(reviews[1]).toContain("RE-CHECK");
+    expect(reviews[1]).toContain("### card:beta");
+    expect(reviews[1]).not.toContain("### card:alpha");
+    expect(reviews[1]).not.toContain("### lorebook:");
+    expect(reviews[1]!.length).toBeLessThan(reviews[0]!.length);
+    expect(state.audit!.checked.join(" ")).toMatch(/read 1 changed of \d+ parts/);
+    expect(state.audit!.checked.join(" ")).toMatch(new RegExp(`1 of ${parts} parts re-scored`));
   });
 
   it("stops early when a round brings no improvement", async () => {

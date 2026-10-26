@@ -95,13 +95,13 @@ export function createTextGenerator(db: Db, connections: ConnectionsRepo, deps: 
     for (let attempt = 0; ; attempt++) {
       const reply = await generate({ ...req, messages });
       let problem: string;
-      let checkFailed = false;
+      let failedChecks = 0;
       try {
         const parsed = schema.safeParse(extractJson(reply));
         if (parsed.success) {
           const problems = check?.(parsed.data) ?? [];
           if (problems.length === 0) return parsed.data;
-          checkFailed = true;
+          failedChecks = problems.length;
           problem = problems.slice(0, 12).join("; ");
         } else {
           problem = parsed.error.issues
@@ -113,8 +113,8 @@ export function createTextGenerator(db: Db, connections: ConnectionsRepo, deps: 
         problem = error instanceof Error ? error.message : "Invalid JSON.";
       }
       if (attempt >= repairAttempts) {
-        throw checkFailed
-          ? new GenerationError(`The output failed ${problem.split("; ").length} consistency check(s) after ${attempt + 1} attempt(s).`, "invalid-output", problem)
+        throw failedChecks
+          ? new GenerationError(`The output failed ${failedChecks} consistency check(s) after ${attempt + 1} attempt(s).`, "invalid-output", problem)
           : new GenerationError(`The model's reply did not match the expected format (${problem}).`, "invalid-output");
       }
       messages.push(

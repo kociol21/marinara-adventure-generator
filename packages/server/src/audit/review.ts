@@ -39,6 +39,31 @@ function targetList(targets: Map<string, string>): string {
   return [...targets].map(([id, label]) => `- ${id}: ${label}`).join("\n");
 }
 
+/** The parts to re-check, by fix target ("card:x", "persona", "lorebook:x", "opening"). */
+function changedText(pkg: AdventurePackage, only: Set<string>): string {
+  const opening = pkg.characters.find((c) => c.key === pkg.openingCardKey);
+  const cards = pkg.characters
+    .filter((c) => only.has(`card:${c.key}`))
+    .map(
+      (c) =>
+        `### card:${c.key} — ${c.name}\nDescription: ${c.description}\nPersonality: ${c.personality}\nBackstory: ${c.backstory}\nAppearance: ${c.appearance}\nScenario: ${c.scenario}${c.key === pkg.openingCardKey ? "" : `\nFirst message: ${c.firstMessage}`}\nExample dialogue: ${c.exampleDialogue}`,
+    );
+  const persona =
+    pkg.persona && only.has("persona")
+      ? [`### persona — ${pkg.persona.name}\n${pkg.persona.description}\n${pkg.persona.personality}\n${pkg.persona.backstory}\n${pkg.persona.scenario}`]
+      : [];
+  const lore = pkg.lorebooks
+    .filter((lb) => only.has(`lorebook:${lb.key}`))
+    .map(
+      (lb) =>
+        `### lorebook:${lb.key} — ${lb.name}\n${lb.entries
+          .map((e, i) => `#${i + 1} ${e.name} [keys: ${e.keys.join(", ")}${e.privateTo.length ? `; private to ${e.privateTo.join(", ")}` : ""}]\n${e.content}`)
+          .join("\n")}`,
+    );
+  const scene = only.has("opening") ? [`### opening — Opening scene${opening ? `\n${opening.firstMessage}` : ""}\nTeaser: ${pkg.teaser}`] : [];
+  return [...cards, ...persona, ...lore, ...scene].join("\n\n");
+}
+
 function packageText(pkg: AdventurePackage): string {
   const cards = pkg.characters.map(
     (c) =>
@@ -64,10 +89,18 @@ export function qualityReviewPrompt(
   pkg: AdventurePackage,
   targets: Map<string, string>,
   candidates: Array<{ a: TextUnit; b: TextUnit; similarity: number }>,
+  /** Re-check only these parts (fix targets); the rest was reviewed before and has not changed. */
+  only?: Set<string>,
 ): string {
+  const recheck = only
+    ? `
+This is a RE-CHECK after revisions. Only the parts in MATERIAL changed; the rest of the adventure was already reviewed and is not shown. Review only this material: against the truth, the fact registry and the clues, and for its own voice, duplicates and style. Pick targets only from the list below.
+`
+    : "";
+  const shownTargets = only ? new Map([...targets].filter(([id]) => only.has(id))) : targets;
   return `Stage: audit-review
 You audit a generated adventure for the Marinara Engine roleplay app before the player receives it. The player must discover the story in play, so this material is hidden from them. Report real problems only; an empty list is a fine answer.
-
+${recheck}
 Check:
 - consistency: contradictions between cards, lorebooks and the truth (names, relations, timeline, places, rules of magic); a character stating as fact something their knowledge layer says they cannot know. Lies and wrong beliefs that are marked as such are intended, not errors.
 - voices: card characters whose voice, goals or reactions are too similar to tell apart.
@@ -75,7 +108,7 @@ Check:
 - mystery: ${clues ? "can a careful player reach every conclusion from clues that exist in the material? Are red herrings explainable? Does the solution rely on a rule never established?" : "skip unless the material contains a mystery."}
 - style: play text (first messages, example dialogue) and, more lightly, descriptive text should follow the requested prose voice.
 For each finding pick the ONE target that should be rewritten to fix it, from this list (use "package" when no single part can fix it, e.g. a logic hole in the truth itself):
-${targetList(targets)}
+${targetList(shownTargets)}
 - package: the plan or truth itself
 "detail" explains the problem for the developer; "fix" is an instruction to the writer of the target part, specific enough to act on.
 ${candidates.length ? `\nPossible paraphrased duplicates found by embeddings (judge them; report only real ones):\n${candidates.map((c) => `- ${c.a.where} ~ ${c.b.where} (similarity ${c.similarity.toFixed(2)})`).join("\n")}\n` : ""}
@@ -91,7 +124,7 @@ ${facts.facts.map((f) => `${f.id} [${f.layer}${f.holder ? ` of ${f.holder}` : ""
 ${clues ? `\nCLUES\n${JSON.stringify(clues)}` : ""}
 
 MATERIAL
-${packageText(pkg)}
+${only ? changedText(pkg, only) : packageText(pkg)}
 
 ${JSON_ONLY}
 {"findings": [{"area": "consistency|voices|duplicates|mystery|style", "severity": "major|minor", "target": "card:...|persona|lorebook:...|opening|package", "detail": "...", "fix": "..."}]}`;

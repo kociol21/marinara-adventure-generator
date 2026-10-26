@@ -36,6 +36,11 @@ export interface AuditOutput {
   notChecked: string[];
   /** Decision-model scores per part; absent in audits made before the judge existed. */
   judge?: JudgeOutput | null;
+  /**
+   * What this audit read: a hash of the plan, facts, clues and requirements, and one per part
+   * (card, persona, lorebook, opening). The next audit re-checks only parts whose hash changed.
+   */
+  memo?: { basis: string; parts: Record<string, string> };
 }
 
 const CARD_FIELDS = ["description", "personality", "backstory", "appearance", "scenario"] as const;

@@ -17,6 +17,8 @@ export interface JudgedPart {
   quality: number;
   /** Lowest of fit and quality. */
   score: number;
+  /** Hash of the judge model, questions and text; an unchanged part keeps its score. */
+  key?: string;
 }
 
 export interface JudgeOutput {

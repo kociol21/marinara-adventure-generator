@@ -187,8 +187,34 @@ const LOREBOOK_PURPOSE: Record<LorebookKey, string> = {
   plot: "Plot: the truth of the case, timeline, clues, secrets, dependencies and what unlocks information.",
 };
 
+/** The places where each clue fact is found, in clue order (one fact may surface at several). */
+export function cluePlaces(clues: Clues, plan: Plan): Map<string, Entity[]> {
+  const out = new Map<string, Entity[]>();
+  for (const clue of clues.clues) {
+    const place = plan.entities.find((e) => e.key === clue.where);
+    if (!clue.factId || !place) continue;
+    const places = out.get(clue.factId) ?? [];
+    if (!places.includes(place)) places.push(place);
+    out.set(clue.factId, places);
+  }
+  return out;
+}
+
+/** This lorebook's clue facts grouped by place; a fact found at several places goes with the first. */
+function clueMap(clues: Clues, plan: Plan, facts: Fact[]): string {
+  const byPlace = new Map<Entity, string[]>();
+  for (const [factId, places] of cluePlaces(clues, plan)) {
+    if (!facts.some((f) => f.id === factId)) continue;
+    byPlace.set(places[0]!, [...(byPlace.get(places[0]!) ?? []), factId]);
+  }
+  return [...byPlace]
+    .map(([place, ids]) => `- ${place.name}${place.aliases.length ? ` (aka ${place.aliases.join(", ")})` : ""}: ${ids.join(", ")}`)
+    .join("\n");
+}
+
 export function lorebookPrompt(r: Requirements, plan: Plan, lorebook: LorebookKey, facts: Fact[], clues: Clues | null): string {
   const cards = plan.entities.filter((e) => e.isCard);
+  const map = lorebook === "plot" && clues ? clueMap(clues, plan, facts) : "";
   return `Stage: lorebook
 Lorebook: ${lorebook}
 ${COMMON}
@@ -209,7 +235,11 @@ Activation (decide for each entry: when should the narrator see this?):
 Content: write for the narrator who must play scenes from it. Each non-constant entry is ${scaleTargets(r).entryWords}-200 words of concrete detail: what is seen and heard, how people act, what can be learned and under which conditions, how it connects to other subjects. Plain prose, no headings. A one-line entry is too thin to play. Prefer one rich entry per subject over many fragments; split only when parts need different keys or privacy.
 Voice: ${voiceRule(r, "descriptive")}${
     lorebook === "plot" && clues
-      ? `\nAlso render the clue map. Clues go into entries BY PLACE: one entry per place or person where clues are found, keyed on that place's or person's name and aliases, holding only the clues found there and how they can be found. Never gather clues from different places into one entry: it would surface everything everywhere. List each clue's fact id in factIds of its place's entry. Keep red herrings with their innocent explanation.`
+      ? `\nAlso render the clue map. Clues go into entries BY PLACE: one entry per place or person where clues are found, keyed on that place's or person's name and aliases, holding only the clues found there and how they can be found. Never gather clues from different places into one entry: it would surface everything everywhere. Keep red herrings with their innocent explanation.${
+          map
+            ? `\nThe CLUE MAP below already groups the clue facts by place. Write one entry per line of it: its keys include that place's name and aliases, its factIds are exactly the ids on that line, and those facts go in no other entry.`
+            : ""
+        }`
       : ""
   }
 
@@ -220,7 +250,7 @@ ${plan.entities.map((e) => `${e.key}: ${e.name}${e.aliases.length ? ` (aka ${e.a
 
 FACTS FOR THIS LOREBOOK
 ${factLines(facts)}
-${lorebook === "plot" && clues ? `\nCLUES\n${JSON.stringify(clues)}` : ""}
+${lorebook === "plot" && clues ? `\nCLUES\n${JSON.stringify(clues)}` : ""}${map ? `\n\nCLUE MAP (place: fact ids)\n${map}` : ""}
 
 ${JSON_ONLY}
 {"entries": [{"key": "kebab-case", "name": "...", "content": "...", "description": "...", "type": "normal", "keys": ["..."], "secondaryKeys": [], "selectiveLogic": "and_any", "matchWholeWords": false, "order": 100, "sticky": null, "delay": null, "privateTo": [], "recursion": false, "factIds": ["f1"]}]}`;

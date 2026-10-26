@@ -296,7 +296,7 @@ export function createPipeline(deps: Deps) {
           // Edit the previous output only when nothing but the notes changed since it was written.
           const sameBase = !!def && !!row?.output && row.baseHash === inputHash(def, hashBase, project.title, rows, NO_NOTES);
           const own = stageNotes.filter((n) => n.player);
-          const isNew = (n: (typeof own)[number]) => !row?.finishedAt || (n.createdAt ?? "") > row.finishedAt;
+          const isNew = (n: (typeof own)[number]) => !row?.finishedAt || (n.createdAt ?? "") >= row.finishedAt;
           const text = (n: (typeof own)[number]) => n.note.slice("player: ".length);
           return {
             notes: stageNotes.filter((n) => !n.player).map(({ round, note }) => ({ round, note })),

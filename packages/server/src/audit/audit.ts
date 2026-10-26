@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import type { AdventurePackage, Requirements } from "@adv/shared";
 import type { TextGenerator } from "../generation/text.ts";
 import { GenerationError } from "../generation/text.ts";
@@ -26,6 +27,27 @@ export interface AuditInput {
   /** A judged part passes above this. */
   judgeThreshold: number;
   repairAttempts: number;
+  /** The last audit of this adventure: parts it read that have not changed keep their results. */
+  previous?: AuditOutput | null;
+}
+
+const hash = (value: unknown) => createHash("sha256").update(JSON.stringify(value)).digest("hex");
+
+/** One hash per fix target, over exactly the text the reviews and the judge read for it. */
+export function partHashes(pkg: AdventurePackage): Record<string, string> {
+  const out: Record<string, string> = {};
+  const opening = pkg.characters.find((c) => c.key === pkg.openingCardKey);
+  for (const card of pkg.characters) {
+    const { avatar: _avatar, ...rest } = card as typeof card & { avatar?: string };
+    out[`card:${card.key}`] = hash(card.key === pkg.openingCardKey ? { ...rest, firstMessage: null } : rest);
+  }
+  if (pkg.persona) {
+    const { avatar: _avatar, ...persona } = pkg.persona;
+    out.persona = hash(persona);
+  }
+  for (const lb of pkg.lorebooks) out[`lorebook:${lb.key}`] = hash(lb);
+  out.opening = hash([pkg.teaser, opening?.firstMessage ?? null]);
+  return out;
 }
 
 const KICKOFF = [{ role: "user" as const, content: "Produce the JSON now." }];
@@ -56,6 +78,14 @@ async function semanticCandidates(input: AuditInput, units: TextUnit[], already:
 /** Runs every check of spec §12 that this version can run, and says which it could not. */
 export async function runAudit(input: AuditInput): Promise<AuditOutput> {
   const units = textUnits(input.pkg);
+  const memo = { basis: hash([input.requirements, input.plan, input.facts, input.clues]), parts: partHashes(input.pkg) };
+  // After a fix round only some parts changed. With the same plan, facts and requirements, the
+  // model reviews re-read just those parts and earlier findings on the rest stay (spec §15 rounds).
+  const previous = input.previous?.memo?.basis === memo.basis ? input.previous : null;
+  const changed = previous
+    ? new Set(Object.keys({ ...memo.parts, ...previous.memo!.parts }).filter((id) => memo.parts[id] !== previous.memo!.parts[id]))
+    : null;
+  const isChanged = (target: string | null) => !changed || (target !== null && changed.has(target));
   const checked: string[] = [
     "Structure, limits and references (code)",
     "Near-verbatim repetition across cards, persona, lorebooks and opening (code)",
@@ -76,9 +106,11 @@ export async function runAudit(input: AuditInput): Promise<AuditOutput> {
 
   let candidates: Array<{ a: TextUnit; b: TextUnit; similarity: number }> = [];
   const embedding = input.embedder?.describe() ?? null;
-  if (embedding) {
+  if (changed?.size === 0) {
+    // Nothing the reviews read has changed; keep their results below.
+  } else if (embedding) {
     try {
-      candidates = await semanticCandidates(input, units, findings);
+      candidates = (await semanticCandidates(input, units, findings)).filter((c) => isChanged(c.a.stage) || isChanged(c.b.stage));
       checked.push(`Paraphrased duplicates by embeddings (${embedding}), judged by the quality review`);
     } catch (error) {
       notChecked.push(`Paraphrased duplicates by embeddings: ${error instanceof GenerationError ? error.message : "embedding request failed"}`);
@@ -87,43 +119,73 @@ export async function runAudit(input: AuditInput): Promise<AuditOutput> {
     notChecked.push("Paraphrased duplicates by embeddings (no embedding model assigned; the quality review still looks for them)");
   }
 
-  const quality = await input.text.generateJson(
-    qualityReviewSchema,
-    {
-      projectId: input.projectId,
-      purpose: "audit-review",
-      system: qualityReviewPrompt(input.requirements, input.plan, input.facts, input.clues, input.pkg, input.targets, candidates),
-      messages: KICKOFF,
-    },
-    input.repairAttempts,
-  );
-  findings.push(...toFindings(null, quality.findings, input.targets));
-  checked.push("Consistency, distinct voices, paraphrased duplicates, mystery logic and prose voice (model review, heuristic)");
+  // Model findings on parts that did not change carry over; plan-level ones too, since the plan did not change.
+  if (previous) {
+    const kept = previous.findings.filter((f) => f.source === "model" && !f.id.startsWith("judge:") && (f.target === null || !changed!.has(f.target)));
+    findings.push(...kept.map((f, i) => ({ ...f, id: `kept-${i + 1}` })));
+  }
+  const recheck = changed ? [...changed].filter((id) => input.targets.has(id)) : null;
 
-  const spoilers = await input.text.generateJson(
-    spoilerReviewSchema,
-    {
-      projectId: input.projectId,
-      purpose: "audit-spoilers",
-      system: spoilerReviewPrompt(input.plan, input.facts, units.filter((u) => u.visible), input.targets),
-      messages: KICKOFF,
-    },
-    input.repairAttempts,
-  );
-  findings.push(...toFindings("spoilers", spoilers.findings, input.targets));
+  if (!recheck || recheck.length > 0) {
+    const only = recheck ? new Set(recheck) : undefined;
+    const quality = await input.text.generateJson(
+      qualityReviewSchema,
+      {
+        projectId: input.projectId,
+        purpose: "audit-review",
+        system: qualityReviewPrompt(input.requirements, input.plan, input.facts, input.clues, input.pkg, input.targets, candidates, only),
+        messages: KICKOFF,
+      },
+      input.repairAttempts,
+    );
+    // A re-check may only report on what it read.
+    findings.push(...toFindings(null, quality.findings, input.targets).filter((f) => !only || f.target === null || only.has(f.target)));
+
+    const visible = units.filter((u) => u.visible && (!only || only.has(u.stage)));
+    if (visible.length > 0) {
+      const spoilers = await input.text.generateJson(
+        spoilerReviewSchema,
+        {
+          projectId: input.projectId,
+          purpose: "audit-spoilers",
+          system: spoilerReviewPrompt(input.plan, input.facts, visible, input.targets),
+          messages: KICKOFF,
+        },
+        input.repairAttempts,
+      );
+      findings.push(...toFindings("spoilers", spoilers.findings, input.targets).filter((f) => !only || f.target === null || only.has(f.target)));
+    }
+  }
+  checked.push("Consistency, distinct voices, paraphrased duplicates, mystery logic and prose voice (model review, heuristic)");
   checked.push("Spoilers in everything the player sees (model review, heuristic)");
+  if (recheck) {
+    const total = Object.keys(memo.parts).length;
+    checked.push(`Re-check after revisions: the model reviews read ${recheck.length} changed of ${total} parts; earlier results kept for the rest`);
+  }
 
   let judge: JudgeOutput | null = null;
   const decision = input.decider?.describe() ?? null;
   if (decision) {
     try {
       const parts = judgedParts(input.pkg, input.requirements);
+      const earlier = input.previous?.judge?.parts ?? [];
+      let rescored = 0;
       const scored = await Promise.all(
-        parts.map(async (part) => scorePart(part, await input.decider!.decide(input.projectId, "audit-judge", part.state, questionsFor(part)))),
+        parts.map(async (part) => {
+          const questions = questionsFor(part);
+          // Same judge, same questions, same text: the earlier score stands.
+          const key = hash([decision, part.state, questions]);
+          const same = earlier.find((p) => p.stage === part.stage && p.key === key);
+          if (same) return same;
+          rescored++;
+          return { ...scorePart(part, await input.decider!.decide(input.projectId, "audit-judge", part.state, questions)), key };
+        }),
       );
       judge = { model: decision, threshold: input.judgeThreshold, parts: scored };
       findings.push(...judgeFindings(judge));
-      checked.push(`Fit to the approved requirements and overall quality, part by part (decision model: ${decision})`);
+      checked.push(
+        `Fit to the approved requirements and overall quality, part by part (decision model: ${decision}${rescored < parts.length ? `; ${rescored} of ${parts.length} parts re-scored, the rest unchanged` : ""})`,
+      );
     } catch (error) {
       notChecked.push(`Fit and quality by a decision model: ${error instanceof GenerationError ? error.message : "decision request failed"}`);
     }
@@ -131,5 +193,5 @@ export async function runAudit(input: AuditInput): Promise<AuditOutput> {
     notChecked.push("Fit and quality by a decision model (no decision model assigned)");
   }
 
-  return { findings, checked, notChecked, judge };
+  return { findings, checked, notChecked, judge, memo };
 }
