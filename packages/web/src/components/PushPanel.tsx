@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { MarinaraStatus, PushRecord, PushRequest, PushStep } from "@adv/shared";
 import { api } from "../api.ts";
 import { MarinaraStatusLine } from "../pages/SettingsPage.tsx";
+import { askConfirm } from "./ConfirmDialog.tsx";
 
 const STEP_ICON: Record<PushStep["status"], string> = { ok: "●", skipped: "○", failed: "✕", undone: "↺" };
 
@@ -47,13 +48,17 @@ export function PushPanel({ projectId, vectorBooks }: { projectId: string; vecto
       ...(vectorConnectionId ? ["Vectorizing uses that Marinara connection's embedding model (quota or credits)."] : []),
       ...(earlier ? [`This adventure was pushed ${earlier} time(s) before; this creates another copy.`] : []),
     ];
-    if (window.confirm(lines.join("\n"))) push.mutate({
-        confirm: true,
-        withoutSecretPlot,
-        vectorConnectionId: vectorConnectionId || null,
-        connectionId: connectionId || null,
-        promptPresetId: presetId || null,
-      });
+    void askConfirm(lines.join("\n")).then(
+      (ok) =>
+        ok &&
+        push.mutate({
+          confirm: true,
+          withoutSecretPlot,
+          vectorConnectionId: vectorConnectionId || null,
+          connectionId: connectionId || null,
+          promptPresetId: presetId || null,
+        }),
+    );
   };
 
   return (

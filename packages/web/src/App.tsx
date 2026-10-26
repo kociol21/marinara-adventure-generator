@@ -6,6 +6,7 @@ import { LibraryPage } from "./pages/LibraryPage.tsx";
 import { ProjectPage } from "./pages/ProjectPage.tsx";
 import { ConnectionsPage } from "./pages/ConnectionsPage.tsx";
 import { SettingsPage } from "./pages/SettingsPage.tsx";
+import { ConfirmHost } from "./components/ConfirmDialog.tsx";
 
 export function App() {
   const health = useQuery({ queryKey: ["health"], queryFn: () => api.get<HealthResponse>("/health") });
@@ -33,6 +34,7 @@ export function App() {
           <Route path="*" element={<p className="muted">Page not found.</p>} />
         </Routes>
       </main>
+      <ConfirmHost />
     </div>
   );
 }

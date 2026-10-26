@@ -482,3 +482,20 @@ a.button {
   min-width: 140px;
   margin: 8px 0;
 }
+
+.confirm-dialog {
+  max-width: min(520px, calc(100vw - 32px));
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+  color: var(--text);
+  padding: 20px;
+}
+
+.confirm-dialog::backdrop {
+  background: rgb(0 0 0 / 0.45);
+}
+
+.confirm-dialog p {
+  margin: 0 0 10px;
+}

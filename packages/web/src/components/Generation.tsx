@@ -5,6 +5,7 @@ import { api } from "../api.ts";
 import { AuditReport } from "./AuditReport.tsx";
 import { ExportPanel } from "./ExportPanel.tsx";
 import { Portraits } from "./Portraits.tsx";
+import { askConfirm } from "./ConfirmDialog.tsx";
 
 const ICON: Record<StageView["status"], string> = {
   pending: "○",
@@ -62,12 +63,9 @@ export function Generation({ projectId }: { projectId: string }) {
   const failed = s.stages.find((st) => st.status === "failed");
 
   const confirmRun = (what: string, run: () => void) => {
-    if (
-      window.confirm(
-        `${what} Each stage is one or more requests to your Text generation model and uses quota or credits. The quality audit adds two requests per round and may regenerate parts with major findings, up to the automatic fix limit in Settings.`,
-      )
-    )
-      run();
+    void askConfirm(
+      `${what} Each stage is one or more requests to your Text generation model and uses quota or credits. The quality audit adds two requests per round and may regenerate parts with major findings, up to the automatic fix limit in Settings.`,
+    ).then((ok) => ok && run());
   };
 
   return (

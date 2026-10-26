@@ -11,6 +11,7 @@ import {
   type TextTestResult,
 } from "@adv/shared";
 import { api } from "../api.ts";
+import { askConfirm } from "./ConfirmDialog.tsx";
 
 const CAPABILITIES: Capability[] = ["text", "image", "embedding"];
 
@@ -72,7 +73,7 @@ export function ConnectionCard({ connection }: { connection: Connection }) {
         <button
           className="danger"
           onClick={() => {
-            if (window.confirm(`Remove the connection "${connection.name}"? Its stored API key is deleted too.`)) remove.mutate();
+            void askConfirm(`Remove the connection "${connection.name}"? Its stored API key is deleted too.`).then((ok) => ok && remove.mutate());
           }}
         >
           Remove
@@ -202,7 +203,7 @@ function CapabilitySection({ connection, capability }: { connection: Connection;
           : chosen.billing === "free"
             ? "This model is listed as free."
             : "Billing for this model is unknown; it may cost money.";
-    if (window.confirm(`Test "${chosen.name}" on ${connection.name}? This will ${what}. ${cost}`)) test.mutate(chosen.modelId);
+    void askConfirm(`Test "${chosen.name}" on ${connection.name}? This will ${what}. ${cost}`).then((ok) => ok && test.mutate(chosen.modelId));
   };
 
   return (

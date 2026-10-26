@@ -5,6 +5,7 @@ import type { Project } from "@adv/shared";
 import { api } from "../api.ts";
 import { Interview } from "../components/Interview.tsx";
 import { Generation } from "../components/Generation.tsx";
+import { askConfirm } from "../components/ConfirmDialog.tsx";
 
 export function ProjectPage() {
   const { id = "" } = useParams();
@@ -65,9 +66,7 @@ export function ProjectPage() {
           className="danger"
           disabled={remove.isPending}
           onClick={() => {
-            if (window.confirm(`Delete "${project.data.title}" and all its local data? This cannot be undone.`)) {
-              remove.mutate();
-            }
+            void askConfirm(`Delete "${project.data.title}" and all its local data? This cannot be undone.`).then((ok) => ok && remove.mutate());
           }}
         >
           Delete adventure
