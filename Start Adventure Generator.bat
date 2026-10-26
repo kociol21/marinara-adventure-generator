@@ -23,11 +23,10 @@ if not errorlevel 1 (
   exit /b 0
 )
 
-if not exist node_modules (
-  echo Installing dependencies, first run only...
-  call %PNPM% install
-  if errorlevel 1 goto failed
-)
+rem Quick when nothing changed; picks up new dependencies after an update.
+echo Installing dependencies...
+call %PNPM% install
+if errorlevel 1 goto failed
 
 echo Building the web app...
 call %PNPM% build

@@ -16,5 +16,15 @@ export interface HealthResponse {
   status: "ok";
   version: string;
   dataDir: string;
-  secretStore: "os-keyring" | "memory";
+  secretStore: "os-keyring" | "file" | "memory";
+}
+
+/** Latest release on GitHub, when "Check for updates" is on and GitHub answered. */
+export interface UpdateInfo {
+  enabled: boolean;
+  current: string;
+  latest: string | null;
+  /** Release page on github.com. */
+  url: string | null;
+  newer: boolean;
 }

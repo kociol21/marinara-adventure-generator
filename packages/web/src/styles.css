@@ -177,6 +177,21 @@ code {
   font-weight: 600;
 }
 
+.update-notice {
+  font-size: 0.8rem;
+  font-weight: 600;
+  padding: 3px 11px;
+  border-radius: 999px;
+  color: var(--gold);
+  background: color-mix(in srgb, var(--gold) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--gold) 45%, transparent);
+  text-decoration: none;
+}
+
+.update-notice:hover {
+  background: color-mix(in srgb, var(--gold) 20%, transparent);
+}
+
 .status {
   color: var(--muted);
   font-size: 0.8rem;

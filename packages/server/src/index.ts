@@ -1,15 +1,19 @@
 import { buildApp } from "./app.ts";
 import { loadConfig } from "./config.ts";
 import { openDatabase } from "./db/database.ts";
-import { KeyringSecretStore } from "./secrets/secret-store.ts";
+import { FileSecretStore, type SecretStore } from "./secrets/secret-store.ts";
 
 const WEB_DEV_PORT = 5173;
 
 const config = loadConfig();
 const db = openDatabase(config.dbPath);
+const secretStore: SecretStore =
+  config.secretStore === "file"
+    ? new FileSecretStore(config.dataDir)
+    : new (await import("./secrets/keyring-store.ts")).KeyringSecretStore();
 const app = await buildApp({
   db,
-  secretStore: new KeyringSecretStore(),
+  secretStore,
   dataDir: config.dataDir,
   port: config.port,
   trustedPorts: config.production ? [] : [WEB_DEV_PORT],

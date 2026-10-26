@@ -1,0 +1,23 @@
+# Joins the generator to the Docker network of a Marinara that runs in Docker,
+# so it can reach Marinara at http://marinara:7860 (Marinara trusts that name and
+# the Docker network without a login).
+#
+#   docker compose -f docker-compose.yml -f docker-compose.marinara.yml up -d --build
+#
+# MARINARA_NETWORK is the network of your Marinara container. With Marinara's own
+# docker-compose.yml it is "<folder name>_default", e.g. "marinara-engine_default".
+# List networks with `docker network ls`, or check the container with
+# `docker inspect <container> --format '{{json .NetworkSettings.Networks}}'`.
+# If the Marinara service is not called "marinara", use its service or container
+# name in the URL instead.
+
+services:
+  adventure-generator:
+    networks:
+      - default
+      - marinara
+
+networks:
+  marinara:
+    external: true
+    name: ${MARINARA_NETWORK:-marinara-engine_default}

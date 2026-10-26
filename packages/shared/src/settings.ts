@@ -12,6 +12,8 @@ const settingsFields = {
   judgeMaxRounds: z.number().int().min(0).max(6),
   /** Marinara base URL used by "Push to Marinara". */
   marinaraBaseUrl: z.string().url().or(z.literal("")),
+  /** Ask GitHub for the latest release (twice a day at most) and show a notice when there is one. */
+  checkForUpdates: z.boolean(),
 };
 
 export const settingsSchema = z.object(settingsFields);
@@ -23,6 +25,7 @@ export const DEFAULT_SETTINGS: Settings = {
   judgeThreshold: 0.7,
   judgeMaxRounds: 4,
   marinaraBaseUrl: "",
+  checkForUpdates: true,
 };
 
 export const updateSettingsSchema = z.object(settingsFields).partial().strict();

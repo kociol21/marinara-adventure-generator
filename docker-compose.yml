@@ -1,0 +1,36 @@
+# Marinara Adventure Generator - Docker Compose
+#
+#   docker compose up -d --build
+#
+# Then open http://localhost:7880. Projects, settings and API keys live in the
+# "adventure-data" volume. To reach a Marinara that also runs in Docker, add the
+# second file (see docker-compose.marinara.yml):
+#
+#   docker compose -f docker-compose.yml -f docker-compose.marinara.yml up -d --build
+
+services:
+  adventure-generator:
+    build: .
+    image: marinara-adventure-generator:local
+    init: true
+    # Loopback only: the app holds API keys and spoilers. Both sides of the
+    # mapping must be the same port, so change PORT, not just the left side.
+    ports:
+      - "127.0.0.1:${PORT:-7880}:${PORT:-7880}"
+    environment:
+      - PORT=${PORT:-7880}
+      # Optional: use your ChatGPT plan through `codex login` (see the volume below).
+      # - CODEX_HOME=/codex
+    volumes:
+      - adventure-data:/data
+      # Optional, for the ChatGPT (Codex login) connection. The folder must be writable:
+      # the app refreshes the token and writes auth.json back, as Codex itself does.
+      # - ${HOME}/.codex:/codex
+    # Lets the container reach services on this computer as host.docker.internal
+    # (needed on Linux; Docker Desktop has it already).
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    restart: unless-stopped
+
+volumes:
+  adventure-data:

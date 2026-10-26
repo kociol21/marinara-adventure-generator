@@ -24,7 +24,10 @@ export function SettingsPage() {
 
   const update = useMutation({
     mutationFn: (input: UpdateSettingsInput) => api.patch<Settings>("/settings", input),
-    onSuccess: (data) => queryClient.setQueryData(["settings"], data),
+    onSuccess: (data, input) => {
+      queryClient.setQueryData(["settings"], data);
+      if (input.checkForUpdates !== undefined) void queryClient.invalidateQueries({ queryKey: ["updates"] });
+    },
   });
 
   if (settings.isLoading) return <p className="muted">Loading…</p>;
@@ -117,12 +120,32 @@ export function SettingsPage() {
       </div>
 
       <div className="panel">
+        <h2>Updates</h2>
+        <label className="field checkbox">
+          <input type="checkbox" checked={s.checkForUpdates} onChange={(e) => update.mutate({ checkForUpdates: e.target.checked })} />
+          <span>
+            Check for updates
+            <small className="muted">
+              Asks GitHub for the latest release at most twice a day and shows a notice in the top bar. Nothing about you or your
+              adventures is sent.
+            </small>
+          </span>
+        </label>
+      </div>
+
+      <div className="panel">
         <h2>Storage</h2>
         <dl className="facts">
           <dt>Data folder</dt>
           <dd>{health.data?.dataDir ?? "…"}</dd>
           <dt>Secret storage</dt>
-          <dd>{health.data?.secretStore === "os-keyring" ? "Operating system credential store" : (health.data?.secretStore ?? "…")}</dd>
+          <dd>
+            {health.data?.secretStore === "os-keyring"
+              ? "Operating system credential store"
+              : health.data?.secretStore === "file"
+                ? "secrets.json in the data folder (Docker)"
+                : (health.data?.secretStore ?? "…")}
+          </dd>
         </dl>
       </div>
     </section>
