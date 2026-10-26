@@ -419,6 +419,23 @@ describe("decision-model judge", () => {
     expect(state.audit!.checked.join(" ")).toMatch(new RegExp(`1 of ${parts} parts re-scored`));
   });
 
+  it("edits the opening for consistency when a fix round rewrote only the opening card", async () => {
+    const { id, requests } = await setup({ varyAlpha: true, decide: (part, v, q) => answers(q, part === "card:alpha" && v === 0 ? 0.3 : 0.9) });
+    const state = await run(id);
+    expect(state.audit!.fixRounds).toBe(1);
+    const chats = requests.filter((r) => r.url.includes("chat/completions")).map(stageOf);
+    const openings = chats.filter((c) => c.stage === "opening").map((c) => c.system);
+    expect(openings).toHaveLength(2);
+    expect(openings[0]).not.toContain("REVISION");
+    expect(openings[1]).toContain("REVISION of your previous output");
+    expect(openings[1]).toContain("opening character's card");
+    // The edit kept the scene, so the re-check reads the card alone.
+    const reviews = chats.filter((c) => c.stage === "audit-review").map((c) => c.system);
+    expect(reviews).toHaveLength(2);
+    expect(reviews[1]).toContain("### card:alpha");
+    expect(reviews[1]).not.toContain("### opening");
+  });
+
   it("stops sending a part back once a rewrite did not beat its best score", async () => {
     const { id, requests } = await setup({
       varyBeta: true,

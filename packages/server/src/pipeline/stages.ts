@@ -278,6 +278,12 @@ export function checkLorebook(out: LorebookOutput, expectedFacts: string[], card
 const plural = (n: number, word: string) =>
   `${n} ${n === 1 ? word : /[^aeiou]y$/.test(word) ? `${word.slice(0, -1)}ies` : `${word}s`}`;
 
+/** The opening as stored: what it was written from, to tell a card-only change from a new start. */
+type OpeningRecord = Opening & { basedOn?: { base: string; card: string; notes: number } };
+
+const CARD_CHANGED =
+  "The opening character's card (OPENING CHARACTER above) was revised. Keep the teaser, opening message and Secret Plot as they are; change only words that now contradict the card (name, personality, voice, scenario). If nothing contradicts it, return the previous output unchanged.";
+
 export function buildStages(requirements: Requirements, plan: Plan | null, portraits?: PortraitOptions): StageDef[] {
   const stages: StageDef[] = [
     {
@@ -373,10 +379,31 @@ export function buildStages(requirements: Requirements, plan: Plan | null, portr
     id: "opening",
     label: "Opening scene, teaser and Secret Plot",
     deps: ["plan", "facts", `card:${plan.openingCardKey}`],
-    run: (ctx) => {
+    run: async (ctx) => {
       const p = ctx.output<Plan>("plan");
       const card = ctx.output<CardOutput>(`card:${p.openingCardKey}`);
-      return llmStage(ctx, "opening", openingSchema, openingPrompt(ctx.requirements, p, card, ctx.output<Facts>("facts")));
+      const facts = ctx.output<Facts>("facts");
+      const system = openingPrompt(ctx.requirements, p, card, facts);
+      const hash = (v: unknown) => createHash("sha256").update(JSON.stringify(v)).digest("hex");
+      const { notes, player } = ctx.revision("opening");
+      const basedOn = { base: hash([ctx.requirements, p, facts]), card: hash(card), notes: notes.length };
+      // A fix round that rewrote only the opening card edits the scene for consistency instead of
+      // writing a new one, so the next audit re-checks the card and not a brand-new opening too.
+      const prior = ctx.previousOutput<OpeningRecord>("opening");
+      if (prior?.basedOn?.base === basedOn.base && prior.basedOn.card !== basedOn.card && player.now.length === 0) {
+        const { basedOn: _, ...previous } = prior;
+        const latest = notes.length ? Math.max(...notes.map((n) => n.round)) : 0;
+        // Notes of this round, if any, are fixed together with the card; older ones stay fixed.
+        const round = notes.length > prior.basedOn.notes ? latest : latest + 1;
+        const revision = revisionBlock([...notes, { round, note: CARD_CHANGED }], previous, player);
+        const out = await ctx.text.generateJson(
+          openingSchema,
+          { projectId: ctx.projectId, purpose: "opening", system: `${system}\n\n${revision}`, messages: KICKOFF },
+          ctx.repairAttempts,
+        );
+        return { ...out, basedOn };
+      }
+      return { ...(await llmStage(ctx, "opening", openingSchema, system)), basedOn };
     },
     summary: () => "teaser, opening message and Secret Plot seed",
   });
