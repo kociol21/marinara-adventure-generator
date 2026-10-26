@@ -77,8 +77,17 @@ export function ProjectPage() {
 
   return (
     <section>
-      <h1>{project.data.name || project.data.title}</h1>
-      <div className="row">
+      <header className="project-head">
+        <div>
+          <h1>{project.data.name || project.data.title}</h1>
+          <p className="muted small">Created {new Date(project.data.createdAt).toLocaleString()}</p>
+        </div>
+        <span className={`badge badge-${project.data.status}`}>{project.data.status}</span>
+      </header>
+
+      {project.data.teaser && <p className="teaser">{project.data.teaser}</p>}
+
+      <div className="row title-row">
         <input aria-label="Working title" value={title} maxLength={200} onChange={(e) => setTitle(e.target.value)} />
         <button disabled={!dirty || rename.isPending} onClick={() => rename.mutate(title.trim())}>
           Rename
@@ -91,15 +100,6 @@ export function ProjectPage() {
           working title makes the generated adventure out of date.
         </p>
       )}
-
-      <dl className="facts">
-        <dt>Status</dt>
-        <dd>{project.data.status}</dd>
-        <dt>Created</dt>
-        <dd>{new Date(project.data.createdAt).toLocaleString()}</dd>
-      </dl>
-
-      {project.data.teaser && <p className="teaser">{project.data.teaser}</p>}
 
       <nav className="steps" role="tablist" aria-label="Adventure steps">
         {TABS.map((t, i) => (

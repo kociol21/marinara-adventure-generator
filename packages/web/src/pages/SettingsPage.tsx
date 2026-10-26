@@ -35,85 +35,96 @@ export function SettingsPage() {
     <section>
       <h1>Settings</h1>
 
-      <label className="field checkbox">
-        <input
-          type="checkbox"
-          checked={s.showSpoilers}
-          onChange={(e) => update.mutate({ showSpoilers: e.target.checked })}
-        />
-        <span>
-          Show spoilers
-          <small className="muted">Reveals hidden adventure content in the app. Off by default.</small>
-        </span>
-      </label>
-
-      <label className="field">
-        <span>Automatic fix attempts per stage</span>
-        <select
-          value={s.maxAutoFixAttempts}
-          onChange={(e) => update.mutate({ maxAutoFixAttempts: Number(e.target.value) })}
-        >
-          {[0, 1, 2, 3, 4, 5].map((n) => (
-            <option key={n} value={n}>
-              {n}
-            </option>
-          ))}
-        </select>
-      </label>
-
-      <label className="field">
-        <span>Judge: pass mark (decision model, 0 to 1)</span>
-        <select value={s.judgeThreshold} onChange={(e) => update.mutate({ judgeThreshold: Number(e.target.value) })}>
-          {[0.5, 0.6, 0.7, 0.75, 0.8, 0.85, 0.9].map((n) => (
-            <option key={n} value={n}>
-              above {n.toFixed(2)}
-            </option>
-          ))}
-        </select>
-      </label>
-
-      <label className="field">
-        <span>Judge: fix rounds at most</span>
-        <select value={s.judgeMaxRounds} onChange={(e) => update.mutate({ judgeMaxRounds: Number(e.target.value) })}>
-          {[0, 1, 2, 3, 4, 5, 6].map((n) => (
-            <option key={n} value={n}>
-              {n}
-            </option>
-          ))}
-        </select>
-      </label>
-      <p className="muted small">
-        Used only when a decision model is assigned on the Connections page. Each round rewrites the parts below the mark and
-        scores them again; it stops early when a round brings no improvement, and keeps an earlier version if a rewrite scores worse.
-      </p>
-
-      <label className="field">
-        <span>Marinara URL (for Push to Marinara)</span>
-        <div className="row">
+      <div className="panel">
+        <h2>Generation</h2>
+        <label className="field checkbox">
           <input
-            placeholder="https://your-marinara-host"
-            value={marinaraUrl ?? ""}
-            onChange={(e) => setMarinaraUrl(e.target.value)}
+            type="checkbox"
+            checked={s.showSpoilers}
+            onChange={(e) => update.mutate({ showSpoilers: e.target.checked })}
           />
-          <button
-            disabled={(marinaraUrl ?? "") === s.marinaraBaseUrl || update.isPending}
-            onClick={() => update.mutate({ marinaraBaseUrl: (marinaraUrl ?? "").trim() })}
+          <span>
+            Show spoilers
+            <small className="muted">Reveals hidden adventure content in the app. Off by default.</small>
+          </span>
+        </label>
+
+        <label className="field">
+          <span>Automatic fix attempts per stage</span>
+          <select
+            value={s.maxAutoFixAttempts}
+            onChange={(e) => update.mutate({ maxAutoFixAttempts: Number(e.target.value) })}
           >
-            Save
-          </button>
-        </div>
-      </label>
-      {update.isError && <p className="error">Could not save: {update.error.message}</p>}
+            {[0, 1, 2, 3, 4, 5].map((n) => (
+              <option key={n} value={n}>
+                {n}
+              </option>
+            ))}
+          </select>
+        </label>
+      </div>
 
-      <MarinaraLogin />
+      <div className="panel">
+        <h2>Judge</h2>
+        <label className="field">
+          <span>Judge: pass mark (decision model, 0 to 1)</span>
+          <select value={s.judgeThreshold} onChange={(e) => update.mutate({ judgeThreshold: Number(e.target.value) })}>
+            {[0.5, 0.6, 0.7, 0.75, 0.8, 0.85, 0.9].map((n) => (
+              <option key={n} value={n}>
+                above {n.toFixed(2)}
+              </option>
+            ))}
+          </select>
+        </label>
 
-      <h2>Storage</h2>
-      <dl className="facts">
-        <dt>Data folder</dt>
-        <dd>{health.data?.dataDir ?? "…"}</dd>
-        <dt>Secret storage</dt>
-        <dd>{health.data?.secretStore === "os-keyring" ? "Operating system credential store" : (health.data?.secretStore ?? "…")}</dd>
-      </dl>
+        <label className="field">
+          <span>Judge: fix rounds at most</span>
+          <select value={s.judgeMaxRounds} onChange={(e) => update.mutate({ judgeMaxRounds: Number(e.target.value) })}>
+            {[0, 1, 2, 3, 4, 5, 6].map((n) => (
+              <option key={n} value={n}>
+                {n}
+              </option>
+            ))}
+          </select>
+        </label>
+        <p className="muted small">
+          Used only when a decision model is assigned on the Connections page. Each round rewrites the parts below the mark and
+          scores them again; it stops early when a round brings no improvement, and keeps an earlier version if a rewrite scores worse.
+        </p>
+      </div>
+
+      <div className="panel">
+        <h2>Marinara</h2>
+        <label className="field">
+          <span>Marinara URL (for Push to Marinara)</span>
+          <div className="row">
+            <input
+              placeholder="https://your-marinara-host"
+              value={marinaraUrl ?? ""}
+              onChange={(e) => setMarinaraUrl(e.target.value)}
+            />
+            <button
+              disabled={(marinaraUrl ?? "") === s.marinaraBaseUrl || update.isPending}
+              onClick={() => update.mutate({ marinaraBaseUrl: (marinaraUrl ?? "").trim() })}
+            >
+              Save
+            </button>
+          </div>
+        </label>
+        {update.isError && <p className="error">Could not save: {update.error.message}</p>}
+
+        <MarinaraLogin />
+      </div>
+
+      <div className="panel">
+        <h2>Storage</h2>
+        <dl className="facts">
+          <dt>Data folder</dt>
+          <dd>{health.data?.dataDir ?? "…"}</dd>
+          <dt>Secret storage</dt>
+          <dd>{health.data?.secretStore === "os-keyring" ? "Operating system credential store" : (health.data?.secretStore ?? "…")}</dd>
+        </dl>
+      </div>
     </section>
   );
 }
