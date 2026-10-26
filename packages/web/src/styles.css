@@ -1093,3 +1093,17 @@ section > form.row:first-of-type {
     transition: none !important;
   }
 }
+
+/* ── Usage ── */
+.usage {
+  overflow-x: auto;
+}
+
+.usage .judge-table {
+  width: 100%;
+}
+
+.usage-total td {
+  font-weight: 600;
+  border-bottom: none;
+}

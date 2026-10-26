@@ -179,4 +179,17 @@ export const migrations: string[] = [
   ALTER TABLE project ADD COLUMN name TEXT NOT NULL DEFAULT '';
   ALTER TABLE project ADD COLUMN rejected_names TEXT NOT NULL DEFAULT '[]';
   `,
+  `
+  -- Usage and cost per request. Prices are USD per million tokens from the provider's catalog;
+  -- cost_usd and billing are fixed when the call is made. estimated = token counts guessed from
+  -- the request size because the provider reported none.
+  ALTER TABLE model_catalog ADD COLUMN price_in REAL;
+  ALTER TABLE model_catalog ADD COLUMN price_out REAL;
+  ALTER TABLE llm_call ADD COLUMN input_tokens INTEGER;
+  ALTER TABLE llm_call ADD COLUMN output_tokens INTEGER;
+  ALTER TABLE llm_call ADD COLUMN cost_usd REAL;
+  ALTER TABLE llm_call ADD COLUMN billing TEXT;
+  ALTER TABLE llm_call ADD COLUMN quota_tokens INTEGER;
+  ALTER TABLE llm_call ADD COLUMN estimated INTEGER NOT NULL DEFAULT 0;
+  `,
 ];

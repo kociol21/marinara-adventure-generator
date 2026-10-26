@@ -29,6 +29,8 @@ interface CatalogRow {
   billing: CatalogModel["billing"];
   quota_multiplier: number | null;
   context_length: number | null;
+  price_in: number | null;
+  price_out: number | null;
   fetched_at: string;
 }
 
@@ -43,6 +45,8 @@ const toCatalogModel = (row: CatalogRow): CatalogModel => ({
   billing: row.billing,
   quotaMultiplier: row.quota_multiplier,
   contextLength: row.context_length,
+  priceIn: row.price_in,
+  priceOut: row.price_out,
   fetchedAt: row.fetched_at,
 });
 
@@ -76,11 +80,12 @@ export function createConnectionsRepo(db: Db, secrets: SecretsRepo) {
   };
 
   const upsertModel = db.prepare(`
-    INSERT INTO model_catalog (connection_id, capability, model_id, name, source, billing, quota_multiplier, context_length, fetched_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO model_catalog (connection_id, capability, model_id, name, source, billing, quota_multiplier, context_length, price_in, price_out, fetched_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(connection_id, capability, model_id) DO UPDATE SET
       name = excluded.name, source = excluded.source, billing = excluded.billing,
-      quota_multiplier = excluded.quota_multiplier, context_length = excluded.context_length, fetched_at = excluded.fetched_at
+      quota_multiplier = excluded.quota_multiplier, context_length = excluded.context_length,
+      price_in = excluded.price_in, price_out = excluded.price_out, fetched_at = excluded.fetched_at
   `);
 
   return {
@@ -147,7 +152,7 @@ export function createConnectionsRepo(db: Db, secrets: SecretsRepo) {
           capability,
         );
         for (const e of entries) {
-          upsertModel.run(connectionId, capability, e.modelId, e.name, e.source, e.billing, e.quotaMultiplier, e.contextLength, now);
+          upsertModel.run(connectionId, capability, e.modelId, e.name, e.source, e.billing, e.quotaMultiplier, e.contextLength, e.priceIn, e.priceOut, now);
         }
       });
       return listModels(connectionId, capability);
@@ -156,7 +161,7 @@ export function createConnectionsRepo(db: Db, secrets: SecretsRepo) {
     addManualModel(connectionId: string, capability: Capability, modelId: string): CatalogModel {
       const existing = listModels(connectionId, capability).find((m) => m.modelId === modelId);
       if (existing) return existing;
-      upsertModel.run(connectionId, capability, modelId, modelId, "manual", "unknown", null, null, new Date().toISOString());
+      upsertModel.run(connectionId, capability, modelId, modelId, "manual", "unknown", null, null, null, null, new Date().toISOString());
       return listModels(connectionId, capability).find((m) => m.modelId === modelId)!;
     },
 

@@ -1,7 +1,8 @@
 import type { Db } from "../db/database.ts";
 import type { ConnectionsRepo } from "../repos/connections.ts";
-import { createAdapter, errorMessage, type AdapterDeps, type DecisionAnswer, type DecisionQuestion } from "../connections/adapters.ts";
+import { createAdapter, errorMessage, type AdapterDeps, type DecisionAnswer, type DecisionQuestion, type Usage } from "../connections/adapters.ts";
 import { GenerationError } from "./text.ts";
+import { createCallLog } from "./call-log.ts";
 
 /** Questions per request; the Decisions API caps a request at 64k tokens. */
 const BATCH = 8;
@@ -13,9 +14,7 @@ const MAX_STATE_CHARS = 100_000;
  * "decision" task, used by the audit's judge. Optional: without an assignment the judge does not run.
  */
 export function createDecider(db: Db, connections: ConnectionsRepo, deps: AdapterDeps) {
-  const log = db.prepare(
-    "INSERT INTO llm_call (project_id, task, purpose, connection_id, model_id, ok, latency_ms, error, created_at) VALUES (?, 'decision', ?, ?, ?, ?, ?, ?, ?)",
-  );
+  const log = createCallLog(db, connections);
 
   const assignment = () => {
     const a = connections.listAssignments().find((x) => x.task === "decision");
@@ -41,11 +40,13 @@ export function createDecider(db: Db, connections: ConnectionsRepo, deps: Adapte
       for (let i = 0; i < keys.length; i += BATCH) {
         const batch = Object.fromEntries(keys.slice(i, i + BATCH).map((k) => [k, questions[k]!]));
         const start = Date.now();
+        const call = { projectId, task: "decision" as const, purpose, connectionId: a.connection.id, modelId: a.modelId };
+        let usage: Usage | null = null;
         try {
-          Object.assign(out, await adapter.decide(a.modelId, state, batch));
-          log.run(projectId, purpose, a.connection.id, a.modelId, 1, Date.now() - start, null, new Date().toISOString());
+          Object.assign(out, await adapter.decide(a.modelId, state, batch, (u) => (usage = u)));
+          log({ ...call, ok: true, latencyMs: Date.now() - start, error: null, usage });
         } catch (error) {
-          log.run(projectId, purpose, a.connection.id, a.modelId, 0, Date.now() - start, errorMessage(error), new Date().toISOString());
+          log({ ...call, ok: false, latencyMs: Date.now() - start, error: errorMessage(error) });
           throw new GenerationError(errorMessage(error), "provider");
         }
       }

@@ -3,6 +3,7 @@ import type { Db } from "../db/database.ts";
 import type { ConnectionsRepo } from "../repos/connections.ts";
 import { createAdapter, errorMessage, type AdapterDeps } from "../connections/adapters.ts";
 import { GenerationError } from "./text.ts";
+import { createCallLog } from "./call-log.ts";
 
 export const PORTRAIT_SIZE = 768;
 
@@ -11,9 +12,7 @@ export const PORTRAIT_SIZE = 768;
  * cropped to a square portrait: providers do not reliably honour the requested size.
  */
 export function createImageGenerator(db: Db, connections: ConnectionsRepo, deps: AdapterDeps) {
-  const log = db.prepare(
-    "INSERT INTO llm_call (project_id, task, purpose, connection_id, model_id, ok, latency_ms, error, created_at) VALUES (?, 'image', ?, ?, ?, ?, ?, ?, ?)",
-  );
+  const log = createCallLog(db, connections);
 
   const assignment = () => {
     const a = connections.listAssignments().find((x) => x.task === "image");
@@ -34,12 +33,14 @@ export function createImageGenerator(db: Db, connections: ConnectionsRepo, deps:
       if (!a) throw new GenerationError("No image model is assigned. Choose one under Connections → Task assignments.", "not-assigned");
       const adapter = createAdapter(a.connection, connections.apiKey(a.connection.id), deps);
       const start = Date.now();
+      const call = { projectId, task: "image" as const, purpose, connectionId: a.connection.id, modelId: a.modelId };
       let dataUrl: string;
       try {
+        // Image prices are per picture and rarely published: the log counts images, not cost.
         dataUrl = await adapter.generateImage(a.modelId, prompt);
-        log.run(projectId, purpose, a.connection.id, a.modelId, 1, Date.now() - start, null, new Date().toISOString());
+        log({ ...call, ok: true, latencyMs: Date.now() - start, error: null });
       } catch (error) {
-        log.run(projectId, purpose, a.connection.id, a.modelId, 0, Date.now() - start, errorMessage(error), new Date().toISOString());
+        log({ ...call, ok: false, latencyMs: Date.now() - start, error: errorMessage(error) });
         throw new GenerationError(errorMessage(error), "provider");
       }
       const raw = Buffer.from(dataUrl.slice(dataUrl.indexOf(",") + 1), "base64");

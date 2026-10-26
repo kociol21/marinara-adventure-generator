@@ -37,6 +37,17 @@ export interface ChatTurn {
   images?: string[];
 }
 
+/** Tokens a request used, as the provider reported them (or estimated, when it reported none). */
+export interface Usage {
+  inputTokens: number;
+  outputTokens: number;
+  /** Cost the provider reported for this request (OpenRouter does), in USD. */
+  costUsd?: number | null;
+  estimated?: boolean;
+}
+
+export type UsageSink = (usage: Usage) => void;
+
 export interface CompletionRequest {
   modelId: string;
   system: string;
@@ -44,7 +55,23 @@ export interface CompletionRequest {
   /** Ignored by ChatGPT (Codex), which takes no output limit. */
   maxOutputTokens?: number;
   timeoutMs?: number;
+  /** Receives the request's token usage when the provider reports it. */
+  onUsage?: UsageSink;
 }
+
+/** The usage block of an OpenAI-style response ({prompt_tokens, completion_tokens, cost?}). */
+export function usageOf(json: unknown): Usage | null {
+  const u = isRecord(json) && isRecord(json.usage) ? json.usage : null;
+  if (!u) return null;
+  const input = Number(u.prompt_tokens ?? u.input_tokens);
+  const output = Number(u.completion_tokens ?? u.output_tokens ?? 0);
+  if (!Number.isFinite(input)) return null;
+  const cost = typeof u.cost === "number" && Number.isFinite(u.cost) ? u.cost : null;
+  return { inputTokens: input, outputTokens: Number.isFinite(output) ? output : 0, costUsd: cost };
+}
+
+/** About four characters per token: only for providers that report no usage. */
+export const estimateTokens = (text: string) => Math.ceil(text.length / 4);
 
 /** A typed question for a decision model (Decisions API: TypeSafe Jev and compatible). */
 export type DecisionQuestion =
@@ -66,9 +93,14 @@ export interface ProviderAdapter {
   /** One image as a data URL. Real request: uses quota or credits. The size is a request, not a guarantee. */
   generateImage(modelId: string, prompt: string): Promise<string>;
   /** Embedding vectors, one per text, in order. */
-  embed(modelId: string, texts: string[]): Promise<number[][]>;
+  embed(modelId: string, texts: string[], onUsage?: UsageSink): Promise<number[][]>;
   /** One Decisions API call: typed answers with probabilities, no generated text. */
-  decide(modelId: string, state: unknown, questions: Record<string, DecisionQuestion>): Promise<Record<string, DecisionAnswer>>;
+  decide(
+    modelId: string,
+    state: unknown,
+    questions: Record<string, DecisionQuestion>,
+    onUsage?: UsageSink,
+  ): Promise<Record<string, DecisionAnswer>>;
   testDecision(modelId: string): Promise<string>;
 }
 
@@ -115,7 +147,17 @@ export interface AdapterDeps {
 }
 
 function entry(modelId: string, name: string, extra: Partial<CatalogEntry> = {}): CatalogEntry {
-  return { modelId, name: name || modelId, source: "catalog", billing: "unknown", quotaMultiplier: null, contextLength: null, ...extra };
+  return {
+    modelId,
+    name: name || modelId,
+    source: "catalog",
+    billing: "unknown",
+    quotaMultiplier: null,
+    contextLength: null,
+    priceIn: null,
+    priceOut: null,
+    ...extra,
+  };
 }
 
 const dataArray = (json: unknown): Record<string, unknown>[] =>
@@ -159,7 +201,7 @@ class OpenAICompatibleAdapter implements ProviderAdapter {
       .map((m) => entry(m.id as string, typeof m.name === "string" ? m.name : (m.id as string), { contextLength: positiveInt(m.context_length) }));
   }
 
-  async complete({ modelId, system, messages, maxOutputTokens, timeoutMs }: CompletionRequest): Promise<string> {
+  async complete({ modelId, system, messages, maxOutputTokens, timeoutMs, onUsage }: CompletionRequest): Promise<string> {
     const json = await requestJson(
       this.fetch,
       joinUrl(this.baseUrl, "chat/completions"),
@@ -188,6 +230,8 @@ class OpenAICompatibleAdapter implements ProviderAdapter {
     const choice = isRecord(json) && Array.isArray(json.choices) ? json.choices[0] : undefined;
     const content = isRecord(choice) && isRecord(choice.message) ? choice.message.content : undefined;
     if (typeof content !== "string") throw new ProviderError(`${this.label} returned no text.`);
+    const usage = usageOf(json);
+    if (usage) onUsage?.(usage);
     return content;
   }
 
@@ -195,7 +239,7 @@ class OpenAICompatibleAdapter implements ProviderAdapter {
     return this.complete({ modelId, system: "", messages: [{ role: "user", content: TEXT_TEST_PROMPT }], maxOutputTokens: 200, timeoutMs: 60_000 });
   }
 
-  async embed(modelId: string, texts: string[]): Promise<number[][]> {
+  async embed(modelId: string, texts: string[], onUsage?: UsageSink): Promise<number[][]> {
     const json = await requestJson(
       this.fetch,
       joinUrl(this.baseUrl, "embeddings"),
@@ -209,6 +253,7 @@ class OpenAICompatibleAdapter implements ProviderAdapter {
     if (rows.length !== texts.length || !rows.every((v) => Array.isArray(v) && v.every((x) => typeof x === "number"))) {
       throw new ProviderError(`${this.label} returned ${rows.length} embeddings for ${texts.length} texts.`);
     }
+    onUsage?.(usageOf(json) ?? { inputTokens: estimateTokens(texts.join("\n")), outputTokens: 0, estimated: true });
     return rows as number[][];
   }
 
@@ -238,15 +283,24 @@ class OpenAICompatibleAdapter implements ProviderAdapter {
     return joinUrl(this.baseUrl, "decisions");
   }
 
-  async decide(modelId: string, state: unknown, questions: Record<string, DecisionQuestion>): Promise<Record<string, DecisionAnswer>> {
+  async decide(
+    modelId: string,
+    state: unknown,
+    questions: Record<string, DecisionQuestion>,
+    onUsage?: UsageSink,
+  ): Promise<Record<string, DecisionAnswer>> {
     if (this.support("decision") === "unsupported") throw new ProviderError(`${this.label} has no decision models.`);
+    const body = JSON.stringify({ model: modelId, state, questions });
     const json = await requestJson(
       this.fetch,
       this.decisionsUrl(),
-      { method: "POST", headers: this.headers(true), body: JSON.stringify({ model: modelId, state, questions }) },
+      { method: "POST", headers: this.headers(true), body },
       { label: `${this.label} decision (${modelId})`, timeoutMs: 120_000 },
     );
-    return parseDecisionAnswers(json, Object.keys(questions), `${this.label} (${modelId})`);
+    const answers = parseDecisionAnswers(json, Object.keys(questions), `${this.label} (${modelId})`);
+    // Decision models bill input tokens; output is answers, not text.
+    onUsage?.(usageOf(json) ?? { inputTokens: estimateTokens(body), outputTokens: 0, estimated: true });
+    return answers;
   }
 
   async testDecision(modelId: string): Promise<string> {
@@ -275,11 +329,15 @@ class NanoGptAdapter extends OpenAICompatibleAdapter {
           const sub = isRecord(m.subscription) ? m.subscription : null;
           const included = typeof sub?.included === "boolean" ? sub.included : undefined;
           const multiplier = typeof sub?.inputTokenMultiplier === "number" ? sub.inputTokenMultiplier : null;
+          const pricing = isRecord(m.pricing) ? m.pricing : null;
+          const listed = pricing?.currency === "USD" && pricing.unit === "per_million_tokens";
           return entry(m.id as string, typeof m.name === "string" ? m.name : (m.id as string), {
             billing: included === true ? "subscription" : included === false ? "paid" : "unknown",
             // An excluded model reports 1, which would read as full coverage; keep it only when included.
             quotaMultiplier: included === true ? multiplier : null,
             contextLength: positiveInt(m.context_length),
+            priceIn: listed ? price(pricing.prompt) : null,
+            priceOut: listed ? price(pricing.completion) : null,
           });
         });
     }
@@ -336,12 +394,39 @@ class OpenRouterAdapter extends OpenAICompatibleAdapter {
       .map((m) => {
         const pricing = isRecord(m.pricing) ? m.pricing : null;
         const free = pricing && Number(pricing.prompt) === 0 && Number(pricing.completion) === 0;
+        // OpenRouter lists USD per token.
+        const perMillion = (v: unknown) => {
+          const p = price(v);
+          return p === null ? null : p * 1_000_000;
+        };
         return entry(m.id as string, typeof m.name === "string" ? m.name : (m.id as string), {
           billing: pricing ? (free ? "free" : "paid") : "unknown",
           contextLength: positiveInt(m.context_length),
+          priceIn: pricing ? perMillion(pricing.prompt) : null,
+          priceOut: pricing ? perMillion(pricing.completion) : null,
         });
       });
   }
+}
+
+/** A non-negative price from a number or numeric string, else null. */
+function price(v: unknown): number | null {
+  const n = typeof v === "number" ? v : typeof v === "string" && v.trim() ? Number(v) : NaN;
+  return Number.isFinite(n) && n >= 0 ? n : null;
+}
+
+/** Token usage from the Responses API's response.completed event. */
+function responsesUsage(sse: string): Usage | null {
+  for (const line of sse.split(/\r?\n/)) {
+    if (!line.startsWith("data:") || !line.includes("response.completed")) continue;
+    try {
+      const event = JSON.parse(line.slice(5).trim()) as unknown;
+      if (isRecord(event) && event.type === "response.completed" && isRecord(event.response)) return usageOf(event.response);
+    } catch {
+      // Not JSON: skip.
+    }
+  }
+  return null;
 }
 
 /** Parse the Responses API event stream, collecting output text. */
@@ -412,7 +497,7 @@ class CodexAdapter implements ProviderAdapter {
       .filter((m): m is CatalogEntry => m !== null);
   }
 
-  async complete({ modelId, system, messages, timeoutMs }: CompletionRequest): Promise<string> {
+  async complete({ modelId, system, messages, timeoutMs, onUsage }: CompletionRequest): Promise<string> {
     const auth = await this.auth.get();
     // Same request shape Marinara sends: Codex requires instructions and streaming, and takes no sampling params.
     const sse = await requestText(
@@ -437,7 +522,10 @@ class CodexAdapter implements ProviderAdapter {
       },
       { label: `${this.label} (${modelId})`, timeoutMs: timeoutMs ?? 300_000 },
     );
-    return collectResponsesText(sse);
+    const text = collectResponsesText(sse);
+    const usage = responsesUsage(sse);
+    if (usage) onUsage?.(usage);
+    return text;
   }
 
   testText(modelId: string): Promise<string> {

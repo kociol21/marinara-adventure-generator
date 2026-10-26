@@ -31,6 +31,8 @@ import { createPushesRepo } from "./repos/pushes.ts";
 import { createPipeline } from "./pipeline/runner.ts";
 import { createStagesRepo } from "./repos/stages.ts";
 import { updateRoutes } from "./routes/updates.ts";
+import { usageRoutes } from "./routes/usage.ts";
+import { createUsageRepo } from "./repos/usage.ts";
 
 export interface AppDeps {
   db: Db;
@@ -100,6 +102,7 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
       await api.register(portraitRoutes, { prefix: "/projects", projects: repos.projects, stages: stagesRepo, images, portraitsDir });
       await api.register(settingsRoutes, { prefix: "/settings", settings: repos.settings });
       await api.register(updateRoutes, { settings: repos.settings, fetch: fetchFn });
+      await api.register(usageRoutes, { projects: repos.projects, usage: createUsageRepo(deps.db, repos.connections) });
       await api.register(secretRoutes, { prefix: "/secrets", secrets: repos.secrets });
       await api.register(marinaraRoutes, { pipeline, pushes: createPushesRepo(deps.db), secrets: repos.secrets, settings: repos.settings, fetch: fetchFn });
       await api.register(connectionRoutes, { prefix: "/connections", connections: repos.connections, adapterDeps });

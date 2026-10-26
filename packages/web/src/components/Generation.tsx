@@ -1,11 +1,12 @@
 import { useEffect, useRef } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import type { GenerationState, StageView } from "@adv/shared";
+import type { GenerationState, StageView, UsageEstimate } from "@adv/shared";
 import { api } from "../api.ts";
 import { AuditReport } from "./AuditReport.tsx";
 import { ExportPanel } from "./ExportPanel.tsx";
 import { Portraits } from "./Portraits.tsx";
 import { askConfirm } from "./ConfirmDialog.tsx";
+import { UsagePanel, estimateText } from "./Usage.tsx";
 
 const ICON: Record<StageView["status"], string> = {
   pending: "○",
@@ -27,10 +28,16 @@ export function Generation({ projectId, view = "generation" }: { projectId: stri
     // Poll while a job runs; stop when it ends.
     refetchInterval: (q) => (q.state.data?.running ? 1500 : false),
   });
+  const estimate = useQuery({
+    queryKey: ["usage-estimate", projectId],
+    queryFn: () => api.get<UsageEstimate>(`/usage/estimate?exclude=${encodeURIComponent(projectId)}`),
+    enabled: view === "generation",
+  });
 
   const after = (s: GenerationState) => {
     queryClient.setQueryData(key, s);
     void queryClient.invalidateQueries({ queryKey: ["projects"] });
+    void queryClient.invalidateQueries({ queryKey: ["usage", projectId] });
   };
 
   const start = useMutation({
@@ -56,18 +63,21 @@ export function Generation({ projectId, view = "generation" }: { projectId: stri
   const running = state.data?.running ?? false;
   const wasRunning = useRef(running);
   useEffect(() => {
-    if (wasRunning.current && !running) void queryClient.invalidateQueries({ queryKey: ["projects"] });
+    if (wasRunning.current && !running) {
+      void queryClient.invalidateQueries({ queryKey: ["projects"] });
+      void queryClient.invalidateQueries({ queryKey: ["usage", projectId] });
+    }
     wasRunning.current = running;
-  }, [running, queryClient]);
+  }, [running, queryClient, projectId]);
 
   if (!state.data) return null;
   const s = state.data;
   const started = s.stages.some((st) => st.status !== "pending");
   const failed = s.stages.find((st) => st.status === "failed");
 
-  const confirmRun = (what: string, run: () => void) => {
+  const confirmRun = (what: string, run: () => void, forecast?: string | null) => {
     void askConfirm(
-      `${what} Each stage is one or more requests to your Text generation model and uses quota or credits. The quality audit adds two requests per round and may regenerate parts with major findings, up to the automatic fix limit in Settings. With a decision model assigned, it also scores every part once per round and may ask for more rounds, up to the judge's limit.`,
+      `${what} ${forecast ? `${forecast} ` : ""}Each stage is one or more requests to your Text generation model and uses quota or credits. The quality audit adds two requests per round and may regenerate parts with major findings, up to the automatic fix limit in Settings. With a decision model assigned, it also scores every part once per round and may ask for more rounds, up to the judge's limit.`,
     ).then((ok) => ok && run());
   };
 
@@ -181,7 +191,11 @@ export function Generation({ projectId, view = "generation" }: { projectId: stri
             Stop after this stage
           </button>
         ) : !s.ready ? (
-          <button onClick={() => confirmRun(started ? "Resume generation?" : "Start generating the adventure?", () => start.mutate())}>
+          <button
+            onClick={() =>
+              confirmRun(started ? "Resume generation?" : "Start generating the adventure?", () => start.mutate(), started ? null : estimateText(estimate.data))
+            }
+          >
             {failed ? "Retry from the failed stage" : started ? "Resume" : "Generate adventure"}
           </button>
         ) : null}
@@ -198,6 +212,8 @@ export function Generation({ projectId, view = "generation" }: { projectId: stri
           </ul>
         </div>
       )}
+      <UsagePanel projectId={projectId} running={s.running} />
+
       {s.ready && s.notes.length > 0 && (
         <div className="muted small">
           <strong>Notes</strong>

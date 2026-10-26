@@ -110,6 +110,9 @@ export interface CatalogModel {
   /** NanoGPT: input tokens of quota charged per token for subscription models. */
   quotaMultiplier: number | null;
   contextLength: number | null;
+  /** List price in USD per million input and output tokens, when the provider publishes it. */
+  priceIn: number | null;
+  priceOut: number | null;
   fetchedAt: string;
 }
 

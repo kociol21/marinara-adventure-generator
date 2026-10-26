@@ -2,8 +2,9 @@ import type { z } from "zod";
 import { CONNECTION_KINDS } from "@adv/shared";
 import type { Db } from "../db/database.ts";
 import type { ConnectionsRepo } from "../repos/connections.ts";
-import { createAdapter, errorMessage, type AdapterDeps, type ChatTurn } from "../connections/adapters.ts";
+import { createAdapter, errorMessage, estimateTokens, type AdapterDeps, type ChatTurn, type Usage } from "../connections/adapters.ts";
 import { ProviderError } from "../connections/http.ts";
+import { createCallLog } from "./call-log.ts";
 
 export class GenerationError extends Error {
   constructor(
@@ -41,9 +42,7 @@ export function extractJson(text: string): unknown {
  * (spec §13: never switch provider, model or billing silently).
  */
 export function createTextGenerator(db: Db, connections: ConnectionsRepo, deps: AdapterDeps) {
-  const log = db.prepare(
-    "INSERT INTO llm_call (project_id, task, purpose, connection_id, model_id, ok, latency_ms, error, created_at) VALUES (?, 'text', ?, ?, ?, ?, ?, ?, ?)",
-  );
+  const log = createCallLog(db, connections);
 
   async function generate(req: GenerateRequest): Promise<string> {
     const assignment = connections.listAssignments().find((a) => a.task === "text");
@@ -56,18 +55,27 @@ export function createTextGenerator(db: Db, connections: ConnectionsRepo, deps: 
     }
     const adapter = createAdapter(connection, connections.apiKey(connection.id), deps);
     const start = Date.now();
+    const call = { projectId: req.projectId ?? null, task: "text" as const, purpose: req.purpose, connectionId: connection.id, modelId: assignment.modelId };
+    let usage: Usage | null = null;
     try {
       const text = await adapter.complete({
         modelId: assignment.modelId,
         system: req.system,
         messages: req.messages,
         ...(req.maxOutputTokens ? { maxOutputTokens: req.maxOutputTokens } : {}),
+        onUsage: (u) => (usage = u),
       });
-      log.run(req.projectId ?? null, req.purpose, connection.id, assignment.modelId, 1, Date.now() - start, null, new Date().toISOString());
+      // Providers that report no usage get an estimate from the request and reply size.
+      usage ??= {
+        inputTokens: estimateTokens(req.system + req.messages.map((m) => m.content).join("\n")),
+        outputTokens: estimateTokens(text),
+        estimated: true,
+      };
+      log({ ...call, ok: true, latencyMs: Date.now() - start, error: null, usage });
       return text;
     } catch (error) {
       const message = errorMessage(error);
-      log.run(req.projectId ?? null, req.purpose, connection.id, assignment.modelId, 0, Date.now() - start, message, new Date().toISOString());
+      log({ ...call, ok: false, latencyMs: Date.now() - start, error: message });
       throw new GenerationError(error instanceof ProviderError ? message : "The model request failed.", "provider");
     }
   }

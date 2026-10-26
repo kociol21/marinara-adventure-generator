@@ -1,7 +1,8 @@
 import type { Db } from "../db/database.ts";
 import type { ConnectionsRepo } from "../repos/connections.ts";
-import { createAdapter, errorMessage, type AdapterDeps } from "../connections/adapters.ts";
+import { createAdapter, errorMessage, type AdapterDeps, type Usage } from "../connections/adapters.ts";
 import { GenerationError } from "./text.ts";
+import { createCallLog } from "./call-log.ts";
 
 const BATCH = 64;
 
@@ -10,9 +11,7 @@ const BATCH = 64;
  * paraphrased duplicates. Optional: without an assignment the audit reports the check as not run.
  */
 export function createEmbedder(db: Db, connections: ConnectionsRepo, deps: AdapterDeps) {
-  const log = db.prepare(
-    "INSERT INTO llm_call (project_id, task, purpose, connection_id, model_id, ok, latency_ms, error, created_at) VALUES (?, 'embedding', ?, ?, ?, ?, ?, ?, ?)",
-  );
+  const log = createCallLog(db, connections);
 
   const assignment = () => {
     const a = connections.listAssignments().find((x) => x.task === "embedding");
@@ -34,11 +33,13 @@ export function createEmbedder(db: Db, connections: ConnectionsRepo, deps: Adapt
       const out: number[][] = [];
       for (let i = 0; i < texts.length; i += BATCH) {
         const start = Date.now();
+        const call = { projectId, task: "embedding" as const, purpose, connectionId: a.connection.id, modelId: a.modelId };
+        let usage: Usage | null = null;
         try {
-          out.push(...(await adapter.embed(a.modelId, texts.slice(i, i + BATCH))));
-          log.run(projectId, purpose, a.connection.id, a.modelId, 1, Date.now() - start, null, new Date().toISOString());
+          out.push(...(await adapter.embed(a.modelId, texts.slice(i, i + BATCH), (u) => (usage = u))));
+          log({ ...call, ok: true, latencyMs: Date.now() - start, error: null, usage });
         } catch (error) {
-          log.run(projectId, purpose, a.connection.id, a.modelId, 0, Date.now() - start, errorMessage(error), new Date().toISOString());
+          log({ ...call, ok: false, latencyMs: Date.now() - start, error: errorMessage(error) });
           throw new GenerationError(errorMessage(error), "provider");
         }
       }

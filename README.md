@@ -148,7 +148,7 @@ The generator talks to Marinara's HTTP API from its own server, never from your 
 ## Known limitations
 
 - All generated content is in English. Your pitch can be in any language.
-- A full adventure takes dozens of model requests. On paid APIs this costs real money, so check the estimate before you start.
+- A full adventure takes dozens of model requests. On paid APIs this costs real money. The Generation tab shows requests, tokens and cost (or subscription quota) per stage, and the start dialog forecasts the next run from your earlier adventures. Prices come from the provider's model list: press **Fetch models** on a connection once to load them.
 - Quality depends heavily on the text model. Strong models give much better mysteries.
 - This is not an official Marinara project.
 
