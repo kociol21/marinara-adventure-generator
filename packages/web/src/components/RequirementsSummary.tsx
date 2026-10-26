@@ -61,6 +61,10 @@ export function RequirementsSummary({
     ["Hard limits", r.content.hardLimits.join("; ")],
     ["Content notes", r.content.notes],
     ["Portrait style", r.visualStyle],
+    [
+      "Lorebook matching",
+      r.lorebookVectors ? "Keywords, plus meaning-based matching for World and Characters" : "Keywords only",
+    ],
     ["You asked for", r.mustInclude.join("; ")],
     ["Language", "English"],
   ];

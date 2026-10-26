@@ -28,6 +28,15 @@ export class PipelineError extends Error {
 
 const sha = (value: unknown) => createHash("sha256").update(typeof value === "string" ? value : JSON.stringify(value)).digest("hex");
 
+/**
+ * Requirements as the stages see and hash them. Lorebook vectors are an export setting: leaving them
+ * out keeps every stage current when the player flips them, and keeps hashes from before they existed.
+ */
+function forGeneration(r: Requirements): Requirements {
+  const { lorebookVectors: _, ...rest } = r;
+  return rest as Requirements;
+}
+
 interface Deps {
   stages: StagesRepo;
   interview: InterviewRepo;
@@ -54,7 +63,8 @@ export function createPipeline(deps: Deps) {
   function approvedRequirements(projectId: string): { requirements: Requirements; hashBase: string } {
     const current = deps.interview.current(projectId);
     if (!current?.approvedAt) throw new PipelineError("Approve the requirements before generating.", 400);
-    return { requirements: current.requirements, hashBase: sha(current.requirements) };
+    const requirements = forGeneration(current.requirements);
+    return { requirements, hashBase: sha(requirements) };
   }
 
   function definitions(projectId: string, requirements: Requirements, rows: Map<string, StageRow>): StageDef[] {
@@ -166,8 +176,9 @@ export function createPipeline(deps: Deps) {
     if (!project || !current?.approvedAt) {
       return { running: jobs.has(projectId), stages: [], warnings: [], notes: [], ready: false, audit: null, title: null };
     }
-    const hashBase = sha(current.requirements);
-    const defs = definitions(projectId, current.requirements, rows);
+    const requirements = forGeneration(current.requirements);
+    const hashBase = sha(requirements);
+    const defs = definitions(projectId, requirements, rows);
     const notes = notesOf(projectId, hashBase);
     const player = deps.stages.playerNotes(projectId);
     const calls = deps.stages.callCounts(projectId);
@@ -458,6 +469,7 @@ export function createPipeline(deps: Deps) {
         const avatar = await portrait("avatar:persona");
         if (avatar) pkg.persona.avatar = avatar;
       }
+      if (deps.interview.current(projectId)?.requirements.lorebookVectors) withVectors(pkg);
       return { ...assembled, package: pkg };
     },
 
@@ -491,6 +503,20 @@ export function createPipeline(deps: Deps) {
       await jobs.get(projectId)?.done;
     },
   };
+}
+
+/**
+ * Meaning-based matching for World and Characters. Plot stays on keywords: its clue entries must surface
+ * only where the clue is found. Constant entries are always in context, so they are not embedded.
+ */
+export const VECTOR_LOREBOOKS = new Set(["world", "characters"]);
+
+function withVectors(pkg: AssembleOutput["package"]): void {
+  for (const lb of pkg.lorebooks) {
+    if (!VECTOR_LOREBOOKS.has(lb.key)) continue;
+    lb.vectors = { ...lb.vectors, enabled: true };
+    for (const e of lb.entries) if (e.type === "constant") e.noVector = true;
+  }
 }
 
 /** Portraits are checked in their own stages; fold their results into the audit's scope lists. */

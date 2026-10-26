@@ -144,6 +144,8 @@ export function createInterviewService(deps: { interview: InterviewRepo; project
       const requirements: Requirements = {
         ...turn.requirements,
         idea,
+        // The player's choice in the form, not the interviewer's.
+        lorebookVectors: before.requirements.lorebookVectors,
         mustInclude: cleanMustInclude(turn.requirements.mustInclude, idea, turn.requirements.startingSituation),
       };
       const questions = turn.questions.filter((q) => !isSpoilerQuestion(q)).slice(0, MAX_QUESTIONS);

@@ -76,6 +76,11 @@ export const requirementsSchema = z.object({
   visualStyle: line(500),
   /** Details the player imposed on purpose (may be plot). Never invented by the interviewer. */
   mustInclude: z.array(z.string().trim().min(1).max(500)).max(20).default([]),
+  /**
+   * Meaning-based matching for the World and Characters lorebooks in Marinara (Plot stays on keywords,
+   * so clues surface only where they are found). Applied at export: changing it regenerates nothing.
+   */
+  lorebookVectors: z.boolean().default(true),
 });
 export type Requirements = z.infer<typeof requirementsSchema>;
 export type RequirementsInput = z.input<typeof requirementsSchema>;

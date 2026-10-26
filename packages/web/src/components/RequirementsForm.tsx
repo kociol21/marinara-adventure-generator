@@ -180,6 +180,17 @@ export function RequirementsForm({
       <Field label="Portrait style">
         <input value={r.visualStyle} onChange={(e) => set("visualStyle", e.target.value)} />
       </Field>
+      <label className="field checkbox">
+        <input type="checkbox" checked={r.lorebookVectors} onChange={(e) => set("lorebookVectors", e.target.checked)} />
+        <span>
+          Meaning-based lorebook matching (vectors)
+          <small className="muted">
+            World and Characters entries also come up when the chat is about them in other words. Plot stays on keywords, so
+            clues surface only where they are found. Marinara builds the vectors with an embedding model when you push. Changing
+            this regenerates nothing.
+          </small>
+        </span>
+      </label>
       <Field label="Details you want included (one per line)">
         <textarea rows={2} value={mustInclude} onChange={(e) => setMustInclude(e.target.value)} />
       </Field>

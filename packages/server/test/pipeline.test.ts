@@ -278,6 +278,24 @@ describe("generation pipeline", () => {
     expect(pkg.lorebooks[0]!.name).toBe("Salt and Lamplight: World");
   });
 
+  it("turns lorebook vectors on and off at export without regenerating anything", async () => {
+    const { id, stageCalls } = await setup();
+    await runToEnd(id);
+    const before = stageCalls().length;
+    const vectors = async () =>
+      Object.fromEntries((await pipeline().exportable(id))!.package.lorebooks.map((lb) => [lb.key, lb.vectors.enabled]));
+    expect(await vectors()).toEqual({ world: true, characters: true, plot: false });
+    const world = (await pipeline().exportable(id))!.package.lorebooks.find((lb) => lb.key === "world")!;
+    expect(world.entries.filter((e) => e.type === "constant").every((e) => e.noVector)).toBe(true);
+
+    await approve(id, { ...requirements, lorebookVectors: false });
+    const state = (await app.inject({ method: "GET", url: `/api/projects/${id}/generation`, headers: { host } })).json() as GenerationState;
+    expect(state.ready).toBe(true);
+    expect(state.stages.every((s) => s.status === "done")).toBe(true);
+    expect(await vectors()).toEqual({ world: false, characters: false, plot: false });
+    expect(stageCalls().length).toBe(before);
+  });
+
   it("marks everything stale when the approved requirements change", async () => {
     const { id, stageCalls } = await setup();
     await runToEnd(id);
