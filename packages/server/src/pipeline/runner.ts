@@ -43,7 +43,7 @@ interface Deps {
 }
 
 /**
- * Runs the generation stages one after another (spec §15). Every stage result is stored with
+ * Runs the generation stages in dependency order (spec §15), independent ones side by side. Every stage result is stored with
  * the hash of its inputs, so a crash, a quota stop or a retry continues from the first stage
  * whose inputs changed; finished stages are reused. One job per project, in-process.
  */
@@ -250,17 +250,23 @@ export function createPipeline(deps: Deps) {
     // After a restore the judge gets no further rounds, so versions cannot swap back and forth.
     let restored = false;
 
+    // Stages whose inputs are all current run side by side, up to the parallel limit. None of them reads
+    // another's output, only its deps, so the result is the same as running them one after another.
+    const running = new Map<string, Promise<void>>();
+    let failed = false;
+
     for (;;) {
-      if (job.cancelled) {
+      if (job.cancelled || failed) {
+        await Promise.all(running.values());
         deps.projects.setStatus(projectId, "approved");
         return;
       }
       const rows = deps.stages.all(projectId);
       const defs = definitions(projectId, requirements, rows);
       const notes = notesOf(projectId, hashBase);
-      if (rows.get("plan")?.status === "done") deps.stages.prune(projectId, defs.map((d) => d.id));
-      const next = defs.find((def) => !isCurrent(def, hashBase, project.title, rows, notes));
-      if (!next) {
+      if (rows.get("plan")?.status === "done" && running.size === 0) deps.stages.prune(projectId, defs.map((d) => d.id));
+      const pending = defs.filter((def) => !running.has(def.id) && !isCurrent(def, hashBase, project.title, rows, notes));
+      if (pending.length === 0 && running.size === 0) {
         // Everything is current. Send major audit findings back to their stages, up to the round limit (spec §15).
         // The judge may ask for more rounds than the other checks, until it passes or stops improving.
         const audit = rows.get("audit")?.output as AuditOutput | undefined;
@@ -292,6 +298,30 @@ export function createPipeline(deps: Deps) {
         return;
       }
 
+      const ready = (id: string) => {
+        const def = defs.find((d) => d.id === id);
+        return def ? isCurrent(def, hashBase, project.title, rows, notes) : rows.get(id)?.status === "done";
+      };
+      const parallel = Math.max(1, deps.settings.get().parallelStages);
+      for (const next of pending.filter((def) => def.deps.every(ready))) {
+        if (running.size >= parallel) break;
+        const done = runStage(next, rows, defs, notes)
+          .then((ok) => {
+            if (!ok) failed = true;
+          })
+          .finally(() => running.delete(next.id));
+        running.set(next.id, done);
+      }
+      // Nothing can start and nothing is running: a dependency is missing.
+      if (running.size === 0) {
+        deps.projects.setStatus(projectId, "approved");
+        return;
+      }
+      await Promise.race(running.values());
+    }
+
+    /** Runs one stage and stores its result; false when it failed. */
+    async function runStage(next: StageDef, rows: Map<string, StageRow>, defs: StageDef[], notes: Notes): Promise<boolean> {
       const ctx: StageContext = {
         projectId,
         title: project.title,
@@ -345,9 +375,9 @@ export function createPipeline(deps: Deps) {
         const { message, detail } = describeFailure(error);
         if (!(error instanceof GenerationError) && !(error instanceof PackageInvalidError)) deps.log?.error(error, "Stage %s failed", next.id);
         deps.stages.fail(projectId, next.id, message, detail);
-        deps.projects.setStatus(projectId, "approved");
-        return;
+        return false;
       }
+      return true;
     }
   }
 

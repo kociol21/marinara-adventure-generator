@@ -85,7 +85,7 @@ describe("projects", () => {
 describe("settings", () => {
   it("returns safe defaults and persists updates", async () => {
     const defaults = await app.inject({ method: "GET", url: "/api/settings", headers: { host } });
-    expect(defaults.json()).toEqual({ showSpoilers: false, maxAutoFixAttempts: 2, judgeThreshold: 0.7, judgeMaxRounds: 4, marinaraBaseUrl: "", checkForUpdates: true });
+    expect(defaults.json()).toEqual({ showSpoilers: false, maxAutoFixAttempts: 2, judgeThreshold: 0.7, judgeMaxRounds: 4, parallelStages: 3, marinaraBaseUrl: "", checkForUpdates: true });
 
     const updated = await app.inject({ method: "PATCH", url: "/api/settings", headers: write, payload: { maxAutoFixAttempts: 3 } });
     expect(updated.json().maxAutoFixAttempts).toBe(3);

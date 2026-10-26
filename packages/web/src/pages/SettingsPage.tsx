@@ -65,6 +65,21 @@ export function SettingsPage() {
             ))}
           </select>
         </label>
+
+        <label className="field">
+          <span>Stages running at the same time</span>
+          <select value={s.parallelStages} onChange={(e) => update.mutate({ parallelStages: Number(e.target.value) })}>
+            {[1, 2, 3, 4, 5, 6].map((n) => (
+              <option key={n} value={n}>
+                {n === 1 ? "1 (one after another)" : n}
+              </option>
+            ))}
+          </select>
+        </label>
+        <p className="muted small">
+          Cards, the persona and the lorebooks do not read each other, so they can be written side by side; the result is the
+          same, only faster. Lower this if your provider reports rate limits; those requests are retried after a pause.
+        </p>
       </div>
 
       <div className="panel">

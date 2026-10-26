@@ -117,7 +117,15 @@ describe("generation pipeline", () => {
     expect(state.ready).toBe(true);
     expect(state.stages.map((s) => s.id)).toEqual([...LLM_STAGES.slice(0, 10), "assemble", "audit", "title"]);
     expect(state.stages.every((s) => s.status === "done")).toBe(true);
-    expect(stageCalls()).toEqual(LLM_STAGES);
+    // Independent stages run side by side, so only the dependency order is fixed.
+    expect([...stageCalls()].sort()).toEqual([...LLM_STAGES].sort());
+    const at = (stage: string) => stageCalls().indexOf(stage);
+    expect(stageCalls().slice(0, 2)).toEqual(["plan", "facts"]);
+    expect(at("clues")).toBeLessThan(at("lorebook:plot"));
+    expect(at("card:alpha")).toBeLessThan(at("opening"));
+    for (const stage of LLM_STAGES.slice(2, 10)) expect(at(stage)).toBeLessThan(at("audit-review"));
+    // The title needs only the plan and the opening, so it may run beside the audit.
+    expect(at("opening")).toBeLessThan(at("title"));
 
     const project = (await app.inject({ method: "GET", url: `/api/projects/${id}`, headers: { host } })).json();
     expect(project).toMatchObject({ status: "ready", teaser: fixture.opening.teaser, title: "Probe Case", name: "The Lamp Beneath the Pier" });
@@ -135,6 +143,26 @@ describe("generation pipeline", () => {
     const files = readZip(zipRes.rawPayload);
     expect([...files.keys()]).toContain("the-lamp-beneath-the-pier/lorebooks/the-lamp-beneath-the-pier-plot.marinara.json");
     expect([...files.values()].map((b) => b.toString()).join("")).not.toContain("SECRET_PLOT_ARC");
+  });
+
+  it("sends exactly the same prompts side by side as one after another", async () => {
+    const prompts = async (parallelStages: number) => {
+      const { id, stageCalls, requests } = await setup();
+      await app.inject({ method: "PATCH", url: "/api/settings", headers: write, payload: { parallelStages } });
+      expect((await runToEnd(id)).ready).toBe(true);
+      const chats = requests.filter((r) => r.url.includes("chat/completions"));
+      const byStage = new Map(chats.map((r) => [stageOf(r).id, JSON.stringify((r.body as { messages: unknown }).messages)]));
+      const order = stageCalls();
+      await app.close();
+      db.close();
+      return { order, byStage };
+    };
+    const sequential = await prompts(1);
+    const parallel = await prompts(3);
+    expect(sequential.order).toEqual(LLM_STAGES);
+    expect(parallel.order).not.toEqual(LLM_STAGES);
+    expect(parallel.byStage).toEqual(sequential.byStage);
+    await setup();
   });
 
   it("never puts story content into the status view", async () => {
@@ -159,17 +187,11 @@ describe("generation pipeline", () => {
     const before = stageCalls().length;
     const resumed = await runToEnd(id);
     expect(resumed.ready).toBe(true);
-    expect(stageCalls().slice(before)).toEqual([
-      "card:beta",
-      "persona",
-      "lorebook:world",
-      "lorebook:characters",
-      "lorebook:plot",
-      "opening",
-      "audit-review",
-      "audit-spoilers",
-      "title",
-    ]);
+    // Stages that ran beside Beta and finished are kept; the rest continues from Beta.
+    const again = stageCalls().slice(before);
+    expect(again.filter((s) => s === "card:beta")).toHaveLength(1);
+    for (const kept of ["plan", "facts", "clues", "card:alpha"]) expect(again).not.toContain(kept);
+    expect([...again.slice(-3)].sort()).toEqual(["audit-review", "audit-spoilers", "title"]);
   });
 
   it("regenerates one card and only what depends on it", async () => {
@@ -264,7 +286,7 @@ describe("generation pipeline", () => {
     expect(stale.stages.find((s) => s.id === "plan")!.status).toBe("stale");
     const before = stageCalls().length;
     await runToEnd(id);
-    expect(stageCalls().slice(before)).toEqual(LLM_STAGES);
+    expect([...stageCalls().slice(before)].sort()).toEqual([...LLM_STAGES].sort());
   });
 
   it("sends code-check problems back to the model and accepts the repair", async () => {

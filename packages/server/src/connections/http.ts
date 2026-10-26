@@ -23,6 +23,16 @@ export interface RequestOptions {
   timeoutMs?: number;
 }
 
+/** Rate limits (429): wait and try again, honouring Retry-After, before giving up. */
+export const backoff = {
+  retries: 4,
+  delayMs: (attempt: number, retryAfter: string | null) => {
+    const seconds = Number(retryAfter);
+    return Math.min(60_000, Number.isFinite(seconds) && seconds > 0 ? seconds * 1000 : 2000 * 2 ** attempt);
+  },
+  sleep: (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms)),
+};
+
 export async function requestText(
   fetchFn: FetchFn,
   url: string,
@@ -30,11 +40,16 @@ export async function requestText(
   { label, timeoutMs = 60_000 }: RequestOptions,
 ): Promise<string> {
   let res: Response;
-  try {
-    res = await fetchFn(url, { ...init, signal: AbortSignal.timeout(timeoutMs) });
-  } catch (error) {
-    const reason = error instanceof Error && error.name === "TimeoutError" ? "timed out" : "could not be reached";
-    throw new ProviderError(`${label} ${reason}`);
+  for (let attempt = 0; ; attempt++) {
+    try {
+      res = await fetchFn(url, { ...init, signal: AbortSignal.timeout(timeoutMs) });
+    } catch (error) {
+      const reason = error instanceof Error && error.name === "TimeoutError" ? "timed out" : "could not be reached";
+      throw new ProviderError(`${label} ${reason}`);
+    }
+    if (res.status !== 429 || attempt >= backoff.retries) break;
+    await res.body?.cancel();
+    await backoff.sleep(backoff.delayMs(attempt, res.headers.get("retry-after")));
   }
   const text = await res.text();
   if (!res.ok) throw new ProviderError(`${label} returned ${res.status}: ${sanitizeProviderText(text)}`, res.status);

@@ -5,6 +5,7 @@ import { openDatabase, type Db } from "../src/db/database.ts";
 import { MemorySecretStore } from "../src/secrets/secret-store.ts";
 import type { CodexAuthClient } from "../src/connections/codex-auth.ts";
 import { fakeFetch, type RecordedRequest } from "./fake-fetch.ts";
+import { backoff } from "../src/connections/http.ts";
 
 const PORT = 7880;
 const host = `127.0.0.1:${PORT}`;
@@ -228,12 +229,43 @@ describe("tests", () => {
   });
 
   it("returns a failed result instead of throwing when the provider errors", async () => {
-    await setup({ "POST /chat/completions": () => ({ status: 429, json: { error: "rate limited" } }) });
-    const conn = await create({ kind: "nano-gpt", name: "Nano", apiKey: "k" });
-    const res = await post(`/api/connections/${conn.id}/test-text`, { modelId: "m", confirmUsage: true });
-    expect(res.statusCode).toBe(200);
-    expect(res.json()).toMatchObject({ ok: false });
-    expect(res.json().error).toContain("429");
+    const waits: number[] = [];
+    const sleep = backoff.sleep;
+    backoff.sleep = async (ms) => void waits.push(ms);
+    try {
+      const { requests } = await setup({ "POST /chat/completions": () => ({ status: 429, json: { error: "rate limited" } }) });
+      const conn = await create({ kind: "nano-gpt", name: "Nano", apiKey: "k" });
+      const res = await post(`/api/connections/${conn.id}/test-text`, { modelId: "m", confirmUsage: true });
+      expect(res.statusCode).toBe(200);
+      expect(res.json()).toMatchObject({ ok: false });
+      expect(res.json().error).toContain("429");
+      // A rate limit is retried with growing pauses before it counts as a failure.
+      expect(requests.filter((r) => r.url.endsWith("/chat/completions"))).toHaveLength(backoff.retries + 1);
+      expect(waits).toEqual([2000, 4000, 8000, 16000]);
+    } finally {
+      backoff.sleep = sleep;
+    }
+  });
+
+  it("waits as long as Retry-After asks and goes on when the limit clears", async () => {
+    const waits: number[] = [];
+    const sleep = backoff.sleep;
+    backoff.sleep = async (ms) => void waits.push(ms);
+    let calls = 0;
+    try {
+      await setup({
+        "POST /chat/completions": () =>
+          calls++ === 0
+            ? { status: 429, headers: { "retry-after": "7" }, json: { error: "slow down" } }
+            : { json: { choices: [{ message: { content: "ok" } }] } },
+      });
+      const conn = await create({ kind: "nano-gpt", name: "Nano", apiKey: "k" });
+      const res = await post(`/api/connections/${conn.id}/test-text`, { modelId: "m", confirmUsage: true });
+      expect(res.json()).toMatchObject({ ok: true });
+      expect(waits).toEqual([7000]);
+    } finally {
+      backoff.sleep = sleep;
+    }
   });
 });
 

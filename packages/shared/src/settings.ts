@@ -10,6 +10,8 @@ const settingsFields = {
   judgeThreshold: z.number().min(0.5).max(0.95),
   /** Fix rounds the judge may ask for in total; the other audit findings keep maxAutoFixAttempts. */
   judgeMaxRounds: z.number().int().min(0).max(6),
+  /** Generation stages that may run at the same time (stages that do not depend on each other). */
+  parallelStages: z.number().int().min(1).max(6),
   /** Marinara base URL used by "Push to Marinara". */
   marinaraBaseUrl: z.string().url().or(z.literal("")),
   /** Ask GitHub for the latest release (twice a day at most) and show a notice when there is one. */
@@ -24,6 +26,7 @@ export const DEFAULT_SETTINGS: Settings = {
   maxAutoFixAttempts: 2,
   judgeThreshold: 0.7,
   judgeMaxRounds: 4,
+  parallelStages: 3,
   marinaraBaseUrl: "",
   checkForUpdates: true,
 };

@@ -138,8 +138,9 @@ describe("portrait stages", () => {
     });
     const state = await run(id);
     expect(images()).toHaveLength(4);
-    expect(JSON.stringify(images()[1]!.body)).toContain("hair should be red");
-    expect(state.stages.find((s) => s.id === "avatar:alpha")!.summary).toMatch(/matches its description/);
+    // Portraits render side by side, so the redraw may belong to any of them.
+    expect(images().filter((r) => JSON.stringify(r.body).includes("hair should be red"))).toHaveLength(1);
+    expect(state.stages.filter((s) => s.id.startsWith("avatar:")).every((s) => /matches its description/.test(s.summary ?? ""))).toBe(true);
   });
 
   it("keeps the portrait unchecked when the text model cannot look at it", async () => {
