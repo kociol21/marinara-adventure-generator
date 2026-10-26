@@ -28,10 +28,12 @@ import {
   type LorebookOutput,
   type Opening,
   type Plan,
+  plotOutputSchema,
+  type PlotOutput,
   titleSchema,
   type TitleOutput,
 } from "./schemas.ts";
-import { cardPrompt, cluePlaces, cluesPrompt, factsPrompt, lorebookPrompt, narrativeVoiceEntry, openingPrompt, personaPrompt, planPrompt, titlePrompt } from "./prompts.ts";
+import { cardPrompt, clueGroups, cluePlaces, cluesPrompt, factsPrompt, lorebookPrompt, narrativeVoiceEntry, openingPrompt, personaPrompt, planPrompt, titlePrompt } from "./prompts.ts";
 import { z } from "zod";
 import { scaleTargets, wordCount } from "./scale.ts";
 
@@ -247,6 +249,54 @@ export function checkClueEntries(out: LorebookOutput, clues: Clues, plan: Plan):
   return problems;
 }
 
+/**
+ * The Plot lorebook as Marinara gets it: each clue place becomes an entry keyed on the place, holding
+ * the fact ids of its clue map line. Clue facts written up in a place are dropped from ordinary entries.
+ * Outputs from before places existed pass through unchanged.
+ */
+export function plotEntries(out: PlotOutput, clues: Clues | null, plan: Plan, factIds: string[]): LorebookOutput {
+  const places = out.places ?? [];
+  if (!clues || places.length === 0) return { entries: out.entries };
+  const groups = [...clueGroups(clues, plan, factIds)];
+  const written = groups.filter(([place]) => places.some((p) => p.place === place.key));
+  const placed = new Set(written.flatMap(([, ids]) => ids));
+  // Ids of other lorebooks' facts (copied from the clue list) mean nothing here.
+  const entries = out.entries.map((e) => {
+    const keys = e.keys.filter((k) => k.trim().length > 2);
+    return { ...e, keys: keys.length ? keys : e.keys, factIds: e.factIds.filter((id) => factIds.includes(id) && !placed.has(id)) };
+  });
+  for (const [place, ids] of written) {
+    const own = places.filter((p) => p.place === place.key);
+    const keys = [...new Map([place.name, ...place.aliases, ...own.flatMap((p) => p.keys)].map((k) => [k.toLowerCase(), k])).values()];
+    entries.push(
+      lorebookEntryDraftSchema.parse({
+        key: entries.some((e) => e.key === `clues-${place.key}`) ? `clues-at-${place.key}` : `clues-${place.key}`,
+        name: `Clues: ${place.name}`,
+        content: own.map((p) => p.content).join("\n\n"),
+        description: own.map((p) => p.description).filter(Boolean).join(" "),
+        keys: keys.filter((k) => k.trim().length > 2),
+        order: 30,
+        factIds: ids,
+      }),
+    );
+  }
+  return { entries };
+}
+
+/** Every clue map line needs exactly one place object, and only clue map places may have one. */
+export function checkPlaces(out: PlotOutput, clues: Clues, plan: Plan, factIds: string[]): string[] {
+  const places = out.places ?? [];
+  const groups = [...clueGroups(clues, plan, factIds)];
+  const problems: string[] = [];
+  const missing = groups.filter(([place]) => !places.some((p) => p.place === place.key));
+  if (missing.length) {
+    problems.push(`"places" has no object for these CLUE MAP lines: ${missing.map(([place, ids]) => `${place.key} (${ids.join(", ")})`).join("; ")}`);
+  }
+  const lines = new Set(groups.map(([place]) => place.key));
+  for (const p of places) if (!lines.has(p.place)) problems.push(`"places" object "${p.place}" is not an entity key of a CLUE MAP line (lines: ${[...lines].join(", ")})`);
+  return problems;
+}
+
 export function checkLorebook(out: LorebookOutput, expectedFacts: string[], cardKeys: Set<string>, requirements: Requirements): string[] {
   const t = scaleTargets(requirements);
   const problems: string[] = [];
@@ -364,14 +414,23 @@ export function buildStages(requirements: Requirements, plan: Plan | null, portr
         const facts = ctx.output<Facts>("facts").facts.filter((f) => f.home.kind === "lorebook" && f.home.lorebook === lb);
         if (facts.length === 0) return { entries: [] } satisfies LorebookOutput;
         const clues = lb === "plot" && ctx.has("clues") ? ctx.output<Clues>("clues") : null;
-        return llmStage(ctx, `lorebook:${lb}`, lorebookOutputSchema, lorebookPrompt(ctx.requirements, p, lb, facts, clues), (o) => [
-          ...checkLorebook(o, facts.map((f) => f.id), cardKeys, ctx.requirements),
-          ...(clues ? checkClueEntries(o, clues, p) : []),
-        ]);
+        const ids = facts.map((f) => f.id);
+        const system = lorebookPrompt(ctx.requirements, p, lb, facts, clues);
+        if (!clues || clueGroups(clues, p, ids).size === 0) {
+          return llmStage(ctx, `lorebook:${lb}`, lorebookOutputSchema, system, (o) => [
+            ...checkLorebook(o, ids, cardKeys, ctx.requirements),
+            ...(clues ? checkClueEntries(o, clues, p) : []),
+          ]);
+        }
+        // Stored as written (with places), so a revision edits what the model wrote.
+        return llmStage(ctx, `lorebook:${lb}`, plotOutputSchema, system, (o) => {
+          const out = plotEntries(o, clues, p, ids);
+          return [...checkPlaces(o, clues, p, ids), ...checkLorebook(out, ids, cardKeys, ctx.requirements), ...checkClueEntries(out, clues, p)];
+        });
       },
       // Plot 2: clue entries by place (prompt + check). Only Plot re-runs for existing projects.
       ...(lb === "plot" ? { version: "2" } : {}),
-      summary: (o) => plural((o as LorebookOutput).entries.length, "entry"),
+      summary: (o) => plural((o as LorebookOutput).entries.length + ((o as PlotOutput).places?.length ?? 0), "entry"),
     });
   }
 
@@ -658,7 +717,9 @@ export function assemble(ctx: StageContext): AssembleOutput {
 
   const voice = narrativeVoiceEntry(ctx.requirements);
   const lorebooks = LOREBOOK_KEYS.map((key) => {
-    const out = ctx.output<LorebookOutput>(`lorebook:${key}`);
+    const raw = ctx.output<PlotOutput>(`lorebook:${key}`);
+    const facts = ctx.output<Facts>("facts").facts.filter((f) => f.home.kind === "lorebook" && f.home.lorebook === key);
+    const out = key === "plot" ? plotEntries(raw, ctx.has("clues") ? ctx.output<Clues>("clues") : null, plan, facts.map((f) => f.id)) : raw;
     // The voice reminder rides in World as one short constant entry, ahead of everything else.
     if (key !== "world" || !voice) return { key, out };
     return {

@@ -201,14 +201,18 @@ export function cluePlaces(clues: Clues, plan: Plan): Map<string, Entity[]> {
 }
 
 /** This lorebook's clue facts grouped by place; a fact found at several places goes with the first. */
-function clueMap(clues: Clues, plan: Plan, facts: Fact[]): string {
+export function clueGroups(clues: Clues, plan: Plan, factIds: string[]): Map<Entity, string[]> {
   const byPlace = new Map<Entity, string[]>();
   for (const [factId, places] of cluePlaces(clues, plan)) {
-    if (!facts.some((f) => f.id === factId)) continue;
+    if (!factIds.includes(factId)) continue;
     byPlace.set(places[0]!, [...(byPlace.get(places[0]!) ?? []), factId]);
   }
-  return [...byPlace]
-    .map(([place, ids]) => `- ${place.name}${place.aliases.length ? ` (aka ${place.aliases.join(", ")})` : ""}: ${ids.join(", ")}`)
+  return byPlace;
+}
+
+function clueMap(clues: Clues, plan: Plan, facts: Fact[]): string {
+  return [...clueGroups(clues, plan, facts.map((f) => f.id))]
+    .map(([place, ids]) => `- ${place.key} (${place.name}${place.aliases.length ? `, aka ${place.aliases.join(", ")}` : ""}): ${ids.join(", ")}`)
     .join("\n");
 }
 
@@ -237,7 +241,7 @@ Voice: ${voiceRule(r, "descriptive")}${
     lorebook === "plot" && clues
       ? `\nAlso render the clue map. Clues go into entries BY PLACE: one entry per place or person where clues are found, keyed on that place's or person's name and aliases, holding only the clues found there and how they can be found. Never gather clues from different places into one entry: it would surface everything everywhere. Keep red herrings with their innocent explanation.${
           map
-            ? `\nThe CLUE MAP below already groups the clue facts by place. Write one entry per line of it: its keys include that place's name and aliases, its factIds are exactly the ids on that line, and those facts go in no other entry.`
+            ? `\nThe CLUE MAP below already groups the clue facts by place. Clue facts do not go in "entries": write them in "places", one object per line of the CLUE MAP, with "place" set to that line's entity key and "content" rendering exactly the facts on that line (what is found there, how it can be found, what it suggests). The code names the entry after the place, keys it on the place's name and aliases and attaches the fact ids; put in "keys" only extra words people use for that place. Every other fact goes in "entries".`
             : ""
         }`
       : ""
@@ -253,7 +257,9 @@ ${factLines(facts)}
 ${lorebook === "plot" && clues ? `\nCLUES\n${JSON.stringify(clues)}` : ""}${map ? `\n\nCLUE MAP (place: fact ids)\n${map}` : ""}
 
 ${JSON_ONLY}
-{"entries": [{"key": "kebab-case", "name": "...", "content": "...", "description": "...", "type": "normal", "keys": ["..."], "secondaryKeys": [], "selectiveLogic": "and_any", "matchWholeWords": false, "order": 100, "sticky": null, "delay": null, "privateTo": [], "recursion": false, "factIds": ["f1"]}]}`;
+{"entries": [{"key": "kebab-case", "name": "...", "content": "...", "description": "...", "type": "normal", "keys": ["..."], "secondaryKeys": [], "selectiveLogic": "and_any", "matchWholeWords": false, "order": 100, "sticky": null, "delay": null, "privateTo": [], "recursion": false, "factIds": ["f1"]}]${
+    map ? `, "places": [{"place": "entity-key", "content": "...", "description": "...", "keys": []}]` : ""
+  }}`;
 }
 
 export function openingPrompt(r: Requirements, plan: Plan, openingCard: { name: string; scenario: string; personality: string }, facts: Facts): string {

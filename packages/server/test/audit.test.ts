@@ -8,8 +8,8 @@ import type { Pipeline } from "../src/pipeline/runner.ts";
 import { findDuplicates, findSpoilers, findUnreachableClues } from "../src/audit/code-checks.ts";
 import { toFindings } from "../src/audit/review.ts";
 import { textUnits } from "../src/audit/units.ts";
-import { factSchema, lorebookOutputSchema, planSchema } from "../src/pipeline/schemas.ts";
-import { checkClueEntries } from "../src/pipeline/stages.ts";
+import { factSchema, lorebookOutputSchema, planSchema, plotOutputSchema } from "../src/pipeline/schemas.ts";
+import { checkClueEntries, checkPlaces, plotEntries } from "../src/pipeline/stages.ts";
 import { lorebookPrompt } from "../src/pipeline/prompts.ts";
 import { fakeFetch, type RecordedRequest } from "./fake-fetch.ts";
 import { readZip } from "./zip-reader.ts";
@@ -163,7 +163,30 @@ describe("code checks", () => {
     const fact = (id: string) =>
       factSchema.parse({ id, subject: "harbor", statement: "x", layer: "truth", secrecy: "hidden", home: { kind: "lorebook", lorebook: "plot" } });
     const prompt = lorebookPrompt(requirements, plan, "plot", [fact("f1"), fact("f2")], shared);
-    expect(prompt).toMatch(/CLUE MAP \(place: fact ids\)\n- Probe Harbor[^\n]*: f1\n- Probe Office[^\n]*: f2/);
+    expect(prompt).toMatch(/CLUE MAP \(place: fact ids\)\n- harbor \(Probe Harbor[^\n]*: f1\n- office \(Probe Office[^\n]*: f2/);
+    expect(prompt).toMatch(/"places"/);
+
+    // The model writes one place object per line; the code keys it and attaches the fact ids.
+    const raw = plotOutputSchema.parse({
+      entries: [entry("harbor-life", ["Probe Harbor"], ["f1", "f3"])],
+      places: [
+        { place: "harbor", content: "harbor clue" },
+        { place: "office", content: "office clue", keys: ["back room"] },
+      ],
+    });
+    const out = plotEntries(raw, shared, plan, ["f1", "f2", "f3"]);
+    expect(out.entries.map((e) => [e.key, e.factIds])).toEqual([
+      ["harbor-life", ["f3"]],
+      ["clues-harbor", ["f1"]],
+      ["clues-office", ["f2"]],
+    ]);
+    expect(out.entries[2]!.keys).toEqual(expect.arrayContaining(["Probe Office", "back room"]));
+    expect(checkClueEntries(out, shared, plan)).toEqual([]);
+    expect(checkPlaces(raw, shared, plan, ["f1", "f2", "f3"])).toEqual([]);
+    const short = plotOutputSchema.parse({ entries: [], places: [{ place: "harbor", content: "x" }, { place: "dock", content: "y" }] });
+    expect(checkPlaces(short, shared, plan, ["f1", "f2"]).join(" | ")).toMatch(/no object for these CLUE MAP lines: office \(f2\).*"dock" is not/);
+    // Outputs written before places existed pass through unchanged.
+    expect(plotEntries({ entries: raw.entries } as never, shared, plan, ["f1"]).entries).toEqual(raw.entries);
   });
 });
 

@@ -117,6 +117,25 @@ export const lorebookOutputSchema = z.object({
 });
 export type LorebookOutput = z.infer<typeof lorebookOutputSchema>;
 
+/**
+ * The Plot lorebook of a mystery: ordinary entries plus one clue entry per place of the clue map.
+ * The code keys each place entry and fills its fact ids; small models could not group clues by place.
+ */
+export const plotOutputSchema = lorebookOutputSchema.extend({
+  places: z
+    .array(
+      z.object({
+        place: z.string().trim().min(1),
+        content: z.string().trim().min(1).max(20000),
+        description: z.string().max(1000).default(""),
+        keys: z.array(z.string().trim().min(1).max(200)).max(20).default([]),
+      }),
+    )
+    .max(100)
+    .default([]),
+});
+export type PlotOutput = z.infer<typeof plotOutputSchema>;
+
 export const openingSchema = z.object({
   /** Spoiler-free teaser for the library and START-HERE. */
   teaser: z.string().trim().min(1).max(1200),
