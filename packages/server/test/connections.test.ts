@@ -214,11 +214,13 @@ describe("tests", () => {
 
   it("tests a decision model on the Decisions API and refuses it on Codex", async () => {
     const { requests } = await setup({
-      "POST nano-gpt.com/api/v1/decisions": () => ({ json: { answers: { refund: { type: "noul", noul: 0.97 } } } }),
+      "POST nano-gpt.com/api/v1/decisions": () => ({
+        json: { answers: { refund: { type: "noul", noul: 0.97 }, urgency: { type: "score", score: 1.5, probabilities: { "0": 0.1, "1": 0.3, "2": 0.6 }, confidence: 0.8 } } },
+      }),
     });
     const conn = await create({ kind: "nano-gpt", name: "Nano", apiKey: "k" });
     const res = await post(`/api/connections/${conn.id}/test-decision`, { modelId: "typesafe/jev-1.14", confirmUsage: true });
-    expect(res.json()).toMatchObject({ ok: true, reply: "yes with p = 0.97" });
+    expect(res.json()).toMatchObject({ ok: true, reply: "yes with p = 0.97; scale: score 1.50 of 0-2, confidence 0.80, levels 0=0.10 1=0.30 2=0.60" });
     expect(requests[0]!.url).toBe("https://nano-gpt.com/api/v1/decisions");
     expect(requests[0]!.body).toMatchObject({ model: "typesafe/jev-1.14", questions: { refund: { type: "noul" } } });
     const codex = await create({ kind: "codex-chatgpt", name: "ChatGPT" });

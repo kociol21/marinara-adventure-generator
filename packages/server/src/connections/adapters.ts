@@ -74,7 +74,15 @@ export interface ProviderAdapter {
 
 const DECISION_TEST = {
   state: "Customer message: I was charged twice for the same order.",
-  questions: { refund: { type: "noul" as const, instructions: "Is the customer reporting a problem with a payment?" } },
+  questions: {
+    refund: { type: "noul" as const, instructions: "Is the customer reporting a problem with a payment?" },
+    // Same shape as the judge's quality question, so the test shows how the scale comes back.
+    urgency: {
+      type: "score" as const,
+      instructions: "How urgent is this message for the support team?",
+      criteria: ["Not urgent", "Somewhat urgent", "Very urgent"],
+    },
+  },
 };
 
 /** Decision models both aggregators offer under the same id (no list endpoint for them). */
@@ -243,8 +251,15 @@ class OpenAICompatibleAdapter implements ProviderAdapter {
 
   async testDecision(modelId: string): Promise<string> {
     const answers = await this.decide(modelId, DECISION_TEST.state, DECISION_TEST.questions);
-    const a = answers.refund!;
-    return a.type === "noul" ? `yes with p = ${a.noul.toFixed(2)}` : "answered";
+    const yes = answers.refund!;
+    const level = answers.urgency!;
+    const scale =
+      level.type === "score"
+        ? `; scale: score ${level.score.toFixed(2)} of 0-2, confidence ${level.confidence.toFixed(2)}, levels ${Object.entries(level.probabilities)
+            .map(([k, p]) => `${k}=${p.toFixed(2)}`)
+            .join(" ")}`
+        : "";
+    return `${yes.type === "noul" ? `yes with p = ${yes.noul.toFixed(2)}` : "answered"}${scale}`;
   }
 }
 
