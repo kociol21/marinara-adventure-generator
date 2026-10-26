@@ -149,4 +149,28 @@ export const migrations: string[] = [
   );
   CREATE INDEX marinara_push_project ON marinara_push(project_id, pushed_at);
   `,
+  `
+  -- Decision-model judge: counts per fix round (no story text), and the best-scored output of
+  -- each judged stage, restored when a later rewrite scores clearly worse. output is hidden content.
+  CREATE TABLE judge_round (
+    project_id  TEXT NOT NULL REFERENCES project(id) ON DELETE CASCADE,
+    basis       TEXT NOT NULL,
+    round       INTEGER NOT NULL,
+    result      TEXT NOT NULL,
+    created_at  TEXT NOT NULL,
+    PRIMARY KEY (project_id, basis, round)
+  );
+  CREATE TABLE judge_best (
+    project_id   TEXT NOT NULL REFERENCES project(id) ON DELETE CASCADE,
+    basis        TEXT NOT NULL,
+    stage        TEXT NOT NULL,
+    base_hash    TEXT,
+    score        REAL NOT NULL,
+    output       TEXT NOT NULL,
+    output_hash  TEXT NOT NULL,
+    summary      TEXT,
+    restored     INTEGER NOT NULL DEFAULT 0,
+    PRIMARY KEY (project_id, basis, stage)
+  );
+  `,
 ];

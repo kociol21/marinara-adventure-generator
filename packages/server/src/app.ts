@@ -20,6 +20,7 @@ import { createInterviewRepo } from "./repos/interview.ts";
 import { createInterviewService } from "./interview/interview.ts";
 import { createTextGenerator } from "./generation/text.ts";
 import { createEmbedder } from "./generation/embeddings.ts";
+import { createDecider } from "./generation/decisions.ts";
 import { createImageGenerator } from "./generation/images.ts";
 import { portraitRoutes } from "./routes/portraits.ts";
 import { join } from "node:path";
@@ -82,6 +83,7 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
     settings: repos.settings,
     text,
     embedder: createEmbedder(deps.db, repos.connections, adapterDeps),
+    decider: createDecider(deps.db, repos.connections, adapterDeps),
     images,
     portraitsDir,
     log: app.log,

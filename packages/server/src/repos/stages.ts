@@ -44,6 +44,24 @@ const toRow = (r: RawRow): StageRow => ({
   finishedAt: r.finished_at,
 });
 
+export interface JudgeRound {
+  round: number;
+  passed: number;
+  total: number;
+  lowest: number;
+  mean: number;
+}
+
+export interface JudgeBest {
+  stage: string;
+  baseHash: string | null;
+  score: number;
+  output: unknown;
+  outputHash: string;
+  summary: string | null;
+  restored: boolean;
+}
+
 export function createStagesRepo(db: Db) {
   return {
     all(projectId: string): Map<string, StageRow> {
@@ -117,12 +135,71 @@ export function createStagesRepo(db: Db) {
       return row.r ?? 0;
     },
 
-    /** Fix rounds used in the current fix session. */
-    fixRounds(projectId: string, basis: string): number {
+    /** Round the current fix session started after (0 for the first session). */
+    sessionStart(projectId: string, basis: string): number {
       const session = db.prepare("SELECT after_round FROM audit_session WHERE project_id = ? AND basis = ?").get(projectId, basis) as
         | { after_round: number }
         | undefined;
-      return this.lastRound(projectId, basis) - (session?.after_round ?? 0);
+      return session?.after_round ?? 0;
+    },
+
+    /** Fix rounds used in the current fix session. */
+    fixRounds(projectId: string, basis: string): number {
+      return this.lastRound(projectId, basis) - this.sessionStart(projectId, basis);
+    },
+
+    /** Judge counts for a round; a re-audit in the same round replaces them. */
+    saveJudgeRound(projectId: string, basis: string, result: JudgeRound): void {
+      db.prepare(
+        "INSERT INTO judge_round (project_id, basis, round, result, created_at) VALUES (?, ?, ?, ?, ?) ON CONFLICT(project_id, basis, round) DO UPDATE SET result = excluded.result, created_at = excluded.created_at",
+      ).run(projectId, basis, result.round, JSON.stringify(result), new Date().toISOString());
+    },
+
+    judgeRounds(projectId: string, basis: string, fromRound: number): JudgeRound[] {
+      const rows = db
+        .prepare("SELECT result FROM judge_round WHERE project_id = ? AND basis = ? AND round >= ? ORDER BY round")
+        .all(projectId, basis, fromRound) as Array<{ result: string }>;
+      return rows.map((r) => JSON.parse(r.result) as JudgeRound);
+    },
+
+    judgeBest(projectId: string, basis: string): Map<string, JudgeBest> {
+      const rows = db.prepare("SELECT * FROM judge_best WHERE project_id = ? AND basis = ?").all(projectId, basis) as Array<{
+        stage: string;
+        base_hash: string | null;
+        score: number;
+        output: string;
+        output_hash: string;
+        summary: string | null;
+        restored: number;
+      }>;
+      return new Map(
+        rows.map((r) => [
+          r.stage,
+          { stage: r.stage, baseHash: r.base_hash, score: r.score, output: JSON.parse(r.output), outputHash: r.output_hash, summary: r.summary, restored: r.restored === 1 },
+        ]),
+      );
+    },
+
+    saveJudgeBest(projectId: string, basis: string, best: JudgeBest): void {
+      db.prepare(`
+        INSERT INTO judge_best (project_id, basis, stage, base_hash, score, output, output_hash, summary, restored)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(project_id, basis, stage) DO UPDATE SET
+          base_hash = excluded.base_hash, score = excluded.score, output = excluded.output,
+          output_hash = excluded.output_hash, summary = excluded.summary, restored = excluded.restored
+      `).run(projectId, basis, best.stage, best.baseHash, best.score, JSON.stringify(best.output), best.outputHash, best.summary, best.restored ? 1 : 0);
+    },
+
+    clearJudgeBest(projectId: string, stage: string | null): void {
+      if (stage === null) db.prepare("DELETE FROM judge_best WHERE project_id = ?").run(projectId);
+      else db.prepare("DELETE FROM judge_best WHERE project_id = ? AND stage = ?").run(projectId, stage);
+    },
+
+    /** Put an earlier output back as the stage's current, done result for the given input hash. */
+    restore(projectId: string, stage: string, inputHash: string, output: unknown, outputHash: string, summary: string | null): void {
+      db.prepare(
+        "UPDATE stage_run SET status = 'done', input_hash = ?, output = ?, output_hash = ?, summary = ?, finished_at = ?, error = NULL, error_detail = NULL WHERE project_id = ? AND stage = ?",
+      ).run(inputHash, JSON.stringify(output), outputHash, summary, new Date().toISOString(), projectId, stage);
     },
 
     /** Start a new fix session: earlier notes stay (and keep their effect), the round budget resets. */

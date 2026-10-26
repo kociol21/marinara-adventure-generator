@@ -8,7 +8,9 @@ export type AuditArea =
   | "mystery"
   | "activation"
   | "spoilers"
-  | "style";
+  | "style"
+  | "fit"
+  | "quality";
 
 export type AuditSeverity = "major" | "minor";
 
@@ -21,6 +23,8 @@ export const AUDIT_AREA_LABELS: Record<AuditArea, string> = {
   activation: "Lorebook activation and clue availability",
   spoilers: "Spoilers in material the player sees",
   style: "Prose voice",
+  fit: "Fit to the approved requirements (decision model)",
+  quality: "Overall quality (decision model)",
 };
 
 /** Spoiler-free view of one finding. */
@@ -49,4 +53,29 @@ export interface AuditReportView {
   /** What could not be checked in this run, and why. */
   notChecked: string[];
   findings: AuditFindingView[];
+  /** The decision-model judge, when one is assigned. Numbers and labels only. */
+  judge: JudgeView | null;
+}
+
+/** One judged part: a card, the persona, a lorebook or the opening. */
+export interface JudgePartView {
+  where: string;
+  /** Lowest of all answers below; the part passes when it is above the threshold. */
+  score: number;
+  pass: boolean;
+  /** Probability that each approved requirement holds. */
+  fit: Array<{ label: string; p: number }>;
+  /** Quality level 0 to 4, scaled to 0 to 1. */
+  quality: number;
+  /** An earlier, better-scored version was kept instead of the last rewrite. */
+  restored: boolean;
+}
+
+export interface JudgeView {
+  model: string;
+  threshold: number;
+  maxRounds: number;
+  /** Fix round the scores belong to (0 = before any fix). */
+  rounds: Array<{ round: number; passed: number; total: number; lowest: number; mean: number }>;
+  parts: JudgePartView[];
 }

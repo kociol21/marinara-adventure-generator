@@ -437,6 +437,26 @@ a.button {
   margin: 8px 0 4px;
 }
 
+.judge-table {
+  border-collapse: collapse;
+  margin: 0.4rem 0 0.6rem;
+}
+
+.judge-table th,
+.judge-table td {
+  text-align: left;
+  padding: 0.15rem 0.8rem 0.15rem 0;
+}
+
+.judge-table th {
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.judge-fail td:nth-child(2) {
+  color: var(--danger);
+}
+
 .audit-area ul {
   margin: 4px 0 10px;
   padding-left: 20px;

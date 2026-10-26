@@ -1,4 +1,74 @@
-import { AUDIT_AREA_LABELS, type AuditArea, type AuditReportView } from "@adv/shared";
+import { AUDIT_AREA_LABELS, type AuditArea, type AuditReportView, type JudgeView } from "@adv/shared";
+
+const num = (x: number) => x.toFixed(2);
+
+/** Decision-model scores: numbers and requirement labels only. */
+function JudgeScores({ judge }: { judge: JudgeView }) {
+  const passed = judge.parts.filter((p) => p.pass).length;
+  return (
+    <div className="audit-area judge">
+      <strong>Judge scores</strong>{" "}
+      <span className="muted small">
+        {judge.model} · pass above {num(judge.threshold)} · up to {judge.maxRounds} fix rounds
+      </span>
+      <p className={passed === judge.parts.length ? "ok small" : "small"}>
+        {passed} of {judge.parts.length} parts pass.
+      </p>
+      {judge.rounds.length > 0 && (
+        <table className="judge-table small">
+          <thead>
+            <tr>
+              <th>Round</th>
+              <th>Passed</th>
+              <th>Lowest</th>
+              <th>Mean</th>
+            </tr>
+          </thead>
+          <tbody>
+            {judge.rounds.map((r) => (
+              <tr key={r.round}>
+                <td>{r.round}</td>
+                <td>
+                  {r.passed}/{r.total}
+                </td>
+                <td>{num(r.lowest)}</td>
+                <td>{num(r.mean)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+      <table className="judge-table small">
+        <thead>
+          <tr>
+            <th>Part</th>
+            <th>Score</th>
+            <th>Quality</th>
+            <th>Lowest requirement</th>
+          </tr>
+        </thead>
+        <tbody>
+          {judge.parts.map((p) => {
+            const low = [...p.fit].sort((a, b) => a.p - b.p)[0];
+            return (
+              <tr key={p.where} className={p.pass ? "" : "judge-fail"}>
+                <td>
+                  {p.where}
+                  {p.restored && <span className="muted"> (earlier version kept)</span>}
+                </td>
+                <td>
+                  {p.pass ? "✓" : "✕"} {num(p.score)}
+                </td>
+                <td>{num(p.quality)}</td>
+                <td title={p.fit.map((f) => `${f.label}: ${num(f.p)}`).join("\n")}>{low ? `${low.label} ${num(low.p)}` : "—"}</td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
+}
 
 /** Spoiler-free audit report. Details appear only when the server sends them (Show spoilers on). */
 export function AuditReport({
@@ -28,6 +98,8 @@ export function AuditReport({
           Automatic fix rounds: {audit.fixRounds} of {audit.maxFixRounds}.
         </span>
       </p>
+
+      {audit.judge && <JudgeScores judge={audit.judge} />}
 
       {areas.map((area) => (
         <div key={area} className="audit-area">

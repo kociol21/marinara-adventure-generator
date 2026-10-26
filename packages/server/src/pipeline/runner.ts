@@ -11,6 +11,8 @@ import { buildStages, FIXABLE_STAGE, type AvatarOutput, PackageInvalidError, typ
 import type { AuditOutput } from "../audit/units.ts";
 import { describeTrials, runActivationTrials } from "../audit/activation-trials.ts";
 import type { Embedder } from "../generation/embeddings.ts";
+import type { Decider } from "../generation/decisions.ts";
+import type { JudgeOutput } from "../audit/judge.ts";
 import type { ImageGenerator } from "../generation/images.ts";
 import { portraitDataUrl } from "./portraits.ts";
 import type { Opening, Plan } from "./schemas.ts";
@@ -33,6 +35,7 @@ interface Deps {
   settings: SettingsRepo;
   text: TextGenerator;
   embedder?: Embedder;
+  decider?: Decider;
   images?: ImageGenerator;
   /** Where portrait PNGs are stored. */
   portraitsDir?: string;
@@ -90,6 +93,61 @@ export function createPipeline(deps: Deps) {
     return (audit?.findings ?? []).filter((f) => f.severity === "major" && f.target && FIXABLE_STAGE.test(f.target));
   }
 
+  /** After an audit: per-round counts, and the best-scored output of every judged stage so far. */
+  function recordJudge(projectId: string, hashBase: string, judge: JudgeOutput, rows: Map<string, StageRow>): void {
+    const scores = judge.parts.map((p) => p.score);
+    deps.stages.saveJudgeRound(projectId, hashBase, {
+      round: deps.stages.lastRound(projectId, hashBase),
+      passed: judge.parts.filter((p) => p.score > judge.threshold).length,
+      total: judge.parts.length,
+      lowest: scores.length ? Math.min(...scores) : 1,
+      mean: scores.length ? scores.reduce((a, b) => a + b, 0) / scores.length : 1,
+    });
+    const best = deps.stages.judgeBest(projectId, hashBase);
+    for (const part of judge.parts) {
+      const row = rows.get(part.stage);
+      if (row?.status !== "done" || !row.outputHash) continue;
+      const b = best.get(part.stage);
+      const same = b?.outputHash === row.outputHash;
+      // A new plan or other upstream change makes the old best unusable.
+      if (!b || b.baseHash !== row.baseHash || same || part.score > b.score) {
+        deps.stages.saveJudgeBest(projectId, hashBase, {
+          stage: part.stage,
+          baseHash: row.baseHash,
+          score: part.score,
+          output: row.output,
+          outputHash: row.outputHash,
+          summary: row.summary,
+          restored: same && !!b?.restored,
+        });
+      }
+    }
+  }
+
+  /** The judge stalled: the last fix round passed no more parts and barely moved the mean. */
+  function plateau(projectId: string, hashBase: string): boolean {
+    const rounds = deps.stages.judgeRounds(projectId, hashBase, deps.stages.sessionStart(projectId, hashBase));
+    const [prev, last] = rounds.slice(-2);
+    return !!prev && !!last && last.round > prev.round && last.passed <= prev.passed && last.mean < prev.mean + 0.02;
+  }
+
+  /** Puts back earlier outputs that scored clearly better than the last rewrite. True when any changed. */
+  function restoreBest(projectId: string, hashBase: string, title: string, judge: JudgeOutput, rows: Map<string, StageRow>, defs: StageDef[], notes: Notes): boolean {
+    const best = deps.stages.judgeBest(projectId, hashBase);
+    let changed = false;
+    for (const part of judge.parts) {
+      const b = best.get(part.stage);
+      const row = rows.get(part.stage);
+      const def = defs.find((d) => d.id === part.stage);
+      if (!b || !row || !def || b.baseHash !== row.baseHash || b.outputHash === row.outputHash || part.score >= b.score - 0.05) continue;
+      deps.stages.restore(projectId, part.stage, inputHash(def, hashBase, title, rows, notes), b.output, b.outputHash, b.summary);
+      deps.stages.saveJudgeBest(projectId, hashBase, { ...b, restored: true });
+      if (part.stage === "opening") deps.projects.update(projectId, { teaser: (b.output as Opening).teaser });
+      changed = true;
+    }
+    return changed;
+  }
+
   function state(projectId: string): GenerationState {
     const project = deps.projects.get(projectId);
     const showSpoilers = deps.settings.get().showSpoilers;
@@ -127,8 +185,29 @@ export function createPipeline(deps: Deps) {
     // Trigger trials are code-only, so they run on the current package for every report.
     const trials = auditOut && ready ? runActivationTrials((assembled!.output as AssembleOutput).package) : null;
     if (scope && trials) scope.checked.push(describeTrials(trials));
+    const judge = auditOut?.judge ?? null;
+    const best = judge ? deps.stages.judgeBest(projectId, hashBase) : null;
     const audit: AuditReportView | null = auditOut
       ? {
+          judge: judge
+            ? {
+                model: judge.model,
+                threshold: judge.threshold,
+                maxRounds: deps.settings.get().judgeMaxRounds,
+                rounds: deps.stages.judgeRounds(projectId, hashBase, deps.stages.sessionStart(projectId, hashBase)),
+                parts: judge.parts.map((p) => {
+                  const b = best!.get(p.stage);
+                  return {
+                    where: p.where,
+                    score: p.score,
+                    pass: p.score > judge.threshold,
+                    fit: p.fit.map((f) => ({ label: f.label, p: f.p })),
+                    quality: p.quality,
+                    restored: !!b?.restored && b.outputHash === rows.get(p.stage)?.outputHash,
+                  };
+                }),
+              }
+            : null,
           fixRounds: deps.stages.fixRounds(projectId, hashBase),
           maxFixRounds: deps.settings.get().maxAutoFixAttempts,
           ...scope!,
@@ -153,6 +232,8 @@ export function createPipeline(deps: Deps) {
     const { requirements, hashBase } = approvedRequirements(projectId);
     const repairAttempts = deps.settings.get().maxAutoFixAttempts;
     deps.projects.setStatus(projectId, "generating");
+    // After a restore the judge gets no further rounds, so versions cannot swap back and forth.
+    let restored = false;
 
     for (;;) {
       if (job.cancelled) {
@@ -166,10 +247,20 @@ export function createPipeline(deps: Deps) {
       const next = defs.find((def) => !isCurrent(def, hashBase, project.title, rows, notes));
       if (!next) {
         // Everything is current. Send major audit findings back to their stages, up to the round limit (spec §15).
-        const toFix = fixable(rows.get("audit")?.output as AuditOutput | undefined);
-        if (toFix.length > 0 && deps.stages.fixRounds(projectId, hashBase) < repairAttempts) {
+        // The judge may ask for more rounds than the other checks, until it passes or stops improving.
+        const audit = rows.get("audit")?.output as AuditOutput | undefined;
+        const judge = audit?.judge ?? null;
+        const used = deps.stages.fixRounds(projectId, hashBase);
+        const judgeFailing = !!judge && judge.parts.some((p) => p.score <= judge.threshold);
+        const limit = judgeFailing && !restored && !plateau(projectId, hashBase) ? Math.max(repairAttempts, deps.settings.get().judgeMaxRounds) : repairAttempts;
+        const toFix = fixable(audit).filter((f) => used < repairAttempts || f.id.startsWith("judge:"));
+        if (toFix.length > 0 && used < limit) {
           const round = deps.stages.lastRound(projectId, hashBase) + 1;
           deps.stages.addNotes(projectId, hashBase, round, toFix.map((f) => ({ stage: f.target!, note: f.fix ?? f.detail })));
+          continue;
+        }
+        if (judge && !restored && restoreBest(projectId, hashBase, project.title, judge, rows, defs, notes)) {
+          restored = true;
           continue;
         }
         deps.projects.setStatus(projectId, "ready");
@@ -192,6 +283,8 @@ export function createPipeline(deps: Deps) {
           return { notes: stageNotes, previous: sameBase ? row!.output : null };
         },
         embedder: deps.embedder ?? null,
+        decider: deps.decider ?? null,
+        judgeThreshold: deps.settings.get().judgeThreshold,
         images: deps.images ?? null,
         portraits: { settings: deps.projects.portraits(projectId), dir: deps.portraitsDir ?? "portraits" },
         output: <T>(id: string) => {
@@ -210,6 +303,8 @@ export function createPipeline(deps: Deps) {
       try {
         const output = await next.run(ctx);
         deps.stages.finish(projectId, next.id, output, sha(output), next.summary(output));
+        const judged = next.id === "audit" ? (output as AuditOutput).judge : null;
+        if (judged) recordJudge(projectId, hashBase, judged, rows);
         if (next.id === "opening") deps.projects.update(projectId, { teaser: (output as Opening).teaser });
       } catch (error) {
         const { message, detail } = describeFailure(error);
@@ -250,6 +345,8 @@ export function createPipeline(deps: Deps) {
       const rows = deps.stages.all(projectId);
       if (!rows.has(stageId)) throw new PipelineError("Unknown stage.", 404);
       deps.stages.invalidate(projectId, stageId);
+      // A deliberate rewrite must not be swapped back for an earlier, better-scored version.
+      deps.stages.clearJudgeBest(projectId, stageId === "plan" ? null : stageId);
       return start(projectId);
     },
 

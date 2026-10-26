@@ -15,7 +15,7 @@ import {
   type FetchModelsResult,
 } from "@adv/shared";
 import type { ConnectionsRepo } from "../repos/connections.ts";
-import { createAdapter, errorMessage, runImageTest, runTextTest, type AdapterDeps } from "../connections/adapters.ts";
+import { createAdapter, errorMessage, runDecisionTest, runImageTest, runTextTest, type AdapterDeps } from "../connections/adapters.ts";
 import { CODEX_BASE_URL } from "../connections/codex-auth.ts";
 
 interface Options {
@@ -132,6 +132,14 @@ export const connectionRoutes: FastifyPluginAsync<Options> = async (app, { conne
     if (!connection) return notFound(reply);
     if (CONNECTION_KINDS[connection.kind].catalog.text === "unsupported") return reply.status(400).send({ error: "No text models here." });
     return runTextTest(adapterFor(connection), modelId);
+  });
+
+  app.post<{ Params: { id: string } }>("/:id/test-decision", async (req, reply) => {
+    const { modelId } = testRequestSchema.parse(req.body);
+    const connection = connections.get(req.params.id);
+    if (!connection) return notFound(reply);
+    if (CONNECTION_KINDS[connection.kind].catalog.decision === "unsupported") return reply.status(400).send({ error: "No decision models here." });
+    return runDecisionTest(adapterFor(connection), modelId);
   });
 
   app.post<{ Params: { id: string } }>("/:id/test-image", async (req, reply) => {

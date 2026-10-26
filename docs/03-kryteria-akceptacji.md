@@ -65,6 +65,14 @@ Paczka „Probe Harbor”, Marinara 2.5.1 (staging), katalog `vendor/marinara-te
 - **Zostaje do zrobienia ręcznie:** ten czat nie ma przypisanego połączenia z modelem ani presetu, bo na VPS nie ma połączenia domyślnego. Wybiera się je w ustawieniach czatu przed pierwszą wiadomością.
 - **Poprawka po tym pushu:** panel Push ma teraz listy **Chat connection** i **Prompt preset** pobrane z Marinary. Z Marinary wychodzą tylko id, nazwa, model i flaga domyślności, bez kluczy (`push.test.ts`, test integracyjny). Domyślny preset Marinary jest zaznaczony z góry. Uwaga: Marinara zapisuje `isDefault` jako tekst `"true"`.
 
+## Ocena modelem decyzyjnym (Jev)
+
+- Zadanie **Judge (decision model)** na stronie Connections. NanoGPT podaje modele Jev w swoim katalogu razem z pokryciem subskrypcji (`typesafe/jev-1.14` jest w subskrypcji). OpenRouter ma stałą listę oznaczoną jako płatna.
+- Audyt pyta model o każdą kartę, personę, każdy lorebook (bez wpisu narrative voice) i scenę otwarcia. Pytania tak/nie dotyczą gatunku, tonu, settingu i limitów treści, a dla persony i otwarcia także opisu bohatera, narracji i sytuacji startowej. Jakość jest oceniana w skali 0–4 z opisanymi poziomami. Wynik części to najniższa z odpowiedzi.
+- Część zalicza ocenę, gdy wynik jest powyżej progu (domyślnie 0,7, w Settings). Inaczej dostaje poprawkę napisaną przez kod, która każe zostawić fakty, imiona, poszlaki i sekrety bez zmian.
+- Rundy oceny mogą przekroczyć zwykły limit poprawek, maksymalnie do limitu oceny (domyślnie 4). Pętla kończy się wcześniej, gdy runda nie zwiększa liczby zaliczonych części ani średniej o co najmniej 0,02. Jeśli przepisana część wypada wyraźnie gorzej (o ponad 0,05) od najlepszej wersji, wraca najlepsza wersja.
+- Raport pokazuje tylko liczby i etykiety wymagań, bez treści (`audit.test.ts`, `connections.test.ts`). Prawdziwe wywołanie Jev nie było jeszcze testowane.
+
 ## Co zostaje
 
 - **Wektory na prawdziwym modelu embeddingów:** ścieżka jest przetestowana na atrapie, a „Woman in Red” nie ma lorebooków z wyszukiwaniem semantycznym.

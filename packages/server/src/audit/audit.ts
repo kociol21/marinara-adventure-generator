@@ -2,6 +2,8 @@ import type { AdventurePackage, Requirements } from "@adv/shared";
 import type { TextGenerator } from "../generation/text.ts";
 import { GenerationError } from "../generation/text.ts";
 import { cosine, type Embedder } from "../generation/embeddings.ts";
+import type { Decider } from "../generation/decisions.ts";
+import { judgedParts, judgeFindings, questionsFor, scorePart, type JudgeOutput } from "./judge.ts";
 import type { PackageIssue } from "../marinara/validate.ts";
 import type { Clues, Facts, Plan } from "../pipeline/schemas.ts";
 import { findDuplicates, findSpoilers, findUnreachableClues, structureFindings } from "./code-checks.ts";
@@ -20,6 +22,9 @@ export interface AuditInput {
   targets: Map<string, string>;
   text: TextGenerator;
   embedder: Embedder | null;
+  decider: Decider | null;
+  /** A judged part passes above this. */
+  judgeThreshold: number;
   repairAttempts: number;
 }
 
@@ -108,5 +113,23 @@ export async function runAudit(input: AuditInput): Promise<AuditOutput> {
   findings.push(...toFindings("spoilers", spoilers.findings, input.targets));
   checked.push("Spoilers in everything the player sees (model review, heuristic)");
 
-  return { findings, checked, notChecked };
+  let judge: JudgeOutput | null = null;
+  const decision = input.decider?.describe() ?? null;
+  if (decision) {
+    try {
+      const parts = judgedParts(input.pkg, input.requirements);
+      const scored = await Promise.all(
+        parts.map(async (part) => scorePart(part, await input.decider!.decide(input.projectId, "audit-judge", part.state, questionsFor(part)))),
+      );
+      judge = { model: decision, threshold: input.judgeThreshold, parts: scored };
+      findings.push(...judgeFindings(judge));
+      checked.push(`Fit to the approved requirements and overall quality, part by part (decision model: ${decision})`);
+    } catch (error) {
+      notChecked.push(`Fit and quality by a decision model: ${error instanceof GenerationError ? error.message : "decision request failed"}`);
+    }
+  } else {
+    notChecked.push("Fit and quality by a decision model (no decision model assigned)");
+  }
+
+  return { findings, checked, notChecked, judge };
 }

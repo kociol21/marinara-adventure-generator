@@ -179,8 +179,28 @@ const stageOf = (req: RecordedRequest) => {
   return { stage, sub, system };
 };
 
-async function setup(options: { review?: () => unknown; embeddings?: boolean } = {}) {
+type Questions = Record<string, { type: string; instructions: string; criteria?: string[] }>;
+/** Answers per judged part; `version` counts Beta card rewrites when varyBeta is on. */
+type DecideFn = (part: string, version: number, questions: Questions) => Record<string, unknown>;
+
+const judgedPart = (state: Record<string, any>) =>
+  state.characterCard ? `card:${state.characterCard.key}` : state.playerPersona ? "persona" : state.lorebook ? `lorebook:${state.lorebook.name}` : "opening";
+
+/** Every requirement holds at p, quality at level q of 4. */
+const answers = (questions: Questions, p: number, q = 3.6) =>
+  Object.fromEntries(
+    Object.entries(questions).map(([k, v]) => [k, v.type === "score" ? { type: "score", score: q, probabilities: {}, confidence: 0.9 } : { type: "noul", noul: p }]),
+  );
+
+async function setup(options: { review?: () => unknown; embeddings?: boolean; decide?: DecideFn; varyBeta?: boolean } = {}) {
+  let betaCalls = 0;
   const fake = fakeFetch({
+    "POST /decisions": (req) => {
+      const body = req.body as { state: Record<string, any>; questions: Questions };
+      const part = judgedPart(body.state);
+      const version = Number(/ v(\d+)$/.exec(body.state.characterCard?.description ?? "")?.[1] ?? 0);
+      return { json: { answers: options.decide!(part, version, body.questions) } };
+    },
     "GET /models": () => ({ json: { data: [{ id: "m1" }, { id: "e1" }] } }),
     "POST /embeddings": (req) => {
       const input = (req.body as { input: string[] }).input;
@@ -192,7 +212,9 @@ async function setup(options: { review?: () => unknown; embeddings?: boolean } =
       const body =
         stage === "audit-review" && options.review
           ? options.review()
-          : stage === "card"
+          : stage === "card" && sub === "beta" && options.varyBeta
+            ? { ...f.cards.beta, description: `${f.cards.beta.description} v${betaCalls++}` }
+            : stage === "card"
             ? f.cards[sub!]
             : stage === "lorebook"
               ? f.lorebooks[sub!]
@@ -208,6 +230,10 @@ async function setup(options: { review?: () => unknown; embeddings?: boolean } =
   if (options.embeddings) {
     await app.inject({ method: "POST", url: `/api/connections/${conn.id}/models`, headers: write, payload: { capability: "embedding", modelId: "e1" } });
     await app.inject({ method: "PUT", url: "/api/assignments/embedding", headers: write, payload: { connectionId: conn.id, modelId: "e1" } });
+  }
+  if (options.decide) {
+    await app.inject({ method: "POST", url: `/api/connections/${conn.id}/models/fetch`, headers: write, payload: { capability: "decision" } });
+    await app.inject({ method: "PUT", url: "/api/assignments/decision", headers: write, payload: { connectionId: conn.id, modelId: "typesafe/jev-1.14" } });
   }
   const id = (await app.inject({ method: "POST", url: "/api/projects", headers: write, payload: { title: "Probe Case" } })).json().id as string;
   await app.inject({ method: "PUT", url: `/api/projects/${id}/requirements`, headers: write, payload: { requirements } });
@@ -304,5 +330,92 @@ describe("audit stage", () => {
     const state = await run(id);
     expect(requests.some((r) => r.url.includes("/embeddings"))).toBe(true);
     expect(state.audit!.checked.join(" ")).toMatch(/Paraphrased duplicates by embeddings \(N · e1\)/);
+  });
+});
+
+describe("decision-model judge", () => {
+  const decisions = (requests: RecordedRequest[]) => requests.filter((r) => r.url.endsWith("/decisions"));
+  const betaPrompts = (requests: RecordedRequest[]) =>
+    requests.filter((r) => r.url.includes("chat/completions") && stageOf(r).stage === "card" && stageOf(r).sub === "beta").map((r) => stageOf(r).system);
+
+  it("scores every part against the requirements and reports numbers only", async () => {
+    const { id, requests } = await setup({ decide: (_part, _v, q) => answers(q, 0.92) });
+    const state = await run(id);
+    const judge = state.audit!.judge!;
+    expect(judge).toMatchObject({ model: "N · typesafe/jev-1.14", threshold: 0.7, maxRounds: 4 });
+    expect(judge.parts.map((p) => p.where)).toEqual(expect.arrayContaining(["Card: Probe Alpha", "Card: Probe Beta", "Persona", "Opening scene and teaser"]));
+    expect(judge.parts.every((p) => p.pass && Math.abs(p.quality - 0.9) < 1e-9)).toBe(true);
+    expect(judge.rounds).toEqual([{ round: 0, passed: judge.parts.length, total: judge.parts.length, lowest: 0.9, mean: expect.closeTo(0.9, 9) }]);
+    expect(state.audit!.findings).toEqual([]);
+    expect(state.audit!.checked.join(" ")).toMatch(/decision model: N · typesafe\/jev-1.14/);
+
+    const calls = decisions(requests);
+    expect(calls).toHaveLength(judge.parts.length);
+    const card = calls.find((r) => judgedPart((r.body as any).state) === "card:beta")!.body as { model: string; questions: Questions };
+    expect(card.model).toBe("typesafe/jev-1.14");
+    expect(Object.keys(card.questions)).toEqual(["genre", "tone", "setting", "content", "quality"]);
+    expect(card.questions.genre!.instructions).toContain("noir detective mystery");
+    expect(card.questions.quality!.criteria).toHaveLength(5);
+    const opening = calls.find((r) => judgedPart((r.body as any).state) === "opening")!.body as { questions: Questions };
+    expect(Object.keys(opening.questions)).toEqual(expect.arrayContaining(["narration", "start"]));
+    // The report carries scores and labels, never the judged text.
+    expect(JSON.stringify(judge)).not.toContain("CARD_BETA_DESCRIPTION");
+  });
+
+  it("rewrites a failing part beyond the fix limit while it improves, up to the judge's rounds", async () => {
+    const { id, requests } = await setup({
+      varyBeta: true,
+      decide: (part, v, q) => ({ ...answers(q, 0.9), ...(part === "card:beta" ? { genre: { type: "noul", noul: 0.17 * v } } : {}) }),
+    });
+    const state = await run(id);
+    const beta = state.audit!.judge!.parts.find((p) => p.where === "Card: Probe Beta")!;
+    expect(state.audit!.fixRounds).toBe(4);
+    expect(state.audit!.judge!.rounds.map((r) => r.round)).toEqual([0, 1, 2, 3, 4]);
+    expect(beta).toMatchObject({ pass: false, restored: false });
+    expect(beta.score).toBeCloseTo(0.68);
+    expect(state.audit!.findings).toEqual([expect.objectContaining({ area: "fit", where: "Card: Probe Beta", fix: "auto" })]);
+    const prompts = betaPrompts(requests);
+    expect(prompts).toHaveLength(5);
+    expect(prompts[1]).toContain("Genre: the answer to");
+    expect(prompts[1]).toContain("Keep every fact, name, clue, secret and relationship unchanged");
+  });
+
+  it("stops early when a round brings no improvement", async () => {
+    const { id, requests } = await setup({
+      varyBeta: true,
+      decide: (part, _v, q) => answers(q, part === "card:beta" ? 0.3 : 0.9),
+    });
+    await app.inject({ method: "PATCH", url: "/api/settings", headers: write, payload: { maxAutoFixAttempts: 0 } });
+    const state = await run(id);
+    expect(state.audit!.fixRounds).toBe(1);
+    expect(state.audit!.judge!.rounds.map((r) => r.passed)).toEqual([6, 6]);
+    expect(betaPrompts(requests)).toHaveLength(2);
+  });
+
+  it("keeps the better-scored earlier version when a rewrite scores worse", async () => {
+    const { id } = await setup({
+      varyBeta: true,
+      decide: (part, v, q) => answers(q, part === "card:beta" ? (v === 0 ? 0.65 : 0.2) : 0.9),
+    });
+    await app.inject({ method: "PATCH", url: "/api/settings", headers: write, payload: { maxAutoFixAttempts: 0 } });
+    const state = await run(id);
+    const beta = state.audit!.judge!.parts.find((p) => p.where === "Card: Probe Beta")!;
+    expect(state.ready).toBe(true);
+    expect(beta).toMatchObject({ restored: true, pass: false });
+    expect(beta.score).toBeCloseTo(0.65);
+    const pkg = (app as unknown as { pipeline: Pipeline }).pipeline.assembled(id)!.package;
+    expect(pkg.characters.find((c) => c.key === "beta")!.description).toMatch(/ v0$/);
+  });
+
+  it("reports the judge as not run when the decision request fails", async () => {
+    const { id } = await setup({
+      decide: () => {
+        throw new Error("boom");
+      },
+    });
+    const state = await run(id);
+    expect(state.ready).toBe(true);
+    expect(state.audit!.judge).toBeNull();
+    expect(state.audit!.notChecked.join(" ")).toMatch(/Fit and quality by a decision model/);
   });
 });

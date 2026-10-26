@@ -67,7 +67,7 @@ export function Generation({ projectId, view = "generation" }: { projectId: stri
 
   const confirmRun = (what: string, run: () => void) => {
     void askConfirm(
-      `${what} Each stage is one or more requests to your Text generation model and uses quota or credits. The quality audit adds two requests per round and may regenerate parts with major findings, up to the automatic fix limit in Settings.`,
+      `${what} Each stage is one or more requests to your Text generation model and uses quota or credits. The quality audit adds two requests per round and may regenerate parts with major findings, up to the automatic fix limit in Settings. With a decision model assigned, it also scores every part once per round and may ask for more rounds, up to the judge's limit.`,
     ).then((ok) => ok && run());
   };
 

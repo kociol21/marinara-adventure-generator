@@ -119,7 +119,7 @@ ${JSON_ONLY}
 {"findings": [{"target": "card:...|persona|lorebook:...|opening", "severity": "major|minor", "detail": "...", "fix": "..."}]}`;
 }
 
-const SUMMARY: Record<Exclude<AuditArea, "structure" | "activation">, (where: string) => string> = {
+const SUMMARY: Record<Exclude<AuditArea, "structure" | "activation" | "fit" | "quality">, (where: string) => string> = {
   consistency: (w) => `${w}: possible contradiction with established facts.`,
   voices: (w) => `${w}: voice or goals too close to another character.`,
   duplicates: (w) => `${w}: repeats information found elsewhere, in other words.`,
@@ -132,12 +132,12 @@ let counter = 0;
 
 /** Model findings get a code-written summary; the model's own words go only into detail and fix. */
 export function toFindings(
-  area: Exclude<AuditArea, "structure" | "activation"> | null,
+  area: Exclude<AuditArea, "structure" | "activation" | "fit" | "quality"> | null,
   items: Array<{ area?: string; severity: "major" | "minor"; target: string; detail: string; fix: string }>,
   targets: Map<string, string>,
 ): AuditFinding[] {
   return items.map((item) => {
-    const a = (area ?? item.area) as Exclude<AuditArea, "structure" | "activation">;
+    const a = (area ?? item.area) as Exclude<AuditArea, "structure" | "activation" | "fit" | "quality">;
     const known = targets.has(item.target);
     const where = known ? targets.get(item.target)! : "Package";
     // Lorebook names and keys are visible only inside the lorebook editor, and Plot entries describe

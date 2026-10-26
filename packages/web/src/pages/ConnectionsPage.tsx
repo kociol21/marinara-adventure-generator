@@ -16,6 +16,11 @@ const TASKS: Array<{ task: Capability; label: string; hint: string }> = [
   { task: "text", label: "Text generation", hint: "Interview, planning, cards, lorebooks and audits." },
   { task: "image", label: "Avatars", hint: "Character portraits." },
   { task: "embedding", label: "Embeddings (audit)", hint: "Finds facts repeated in other words across the package." },
+  {
+    task: "decision",
+    label: "Judge (decision model)",
+    hint: "Scores each part for fit to the requirements and quality; parts below the bar are rewritten.",
+  },
 ];
 
 export function ConnectionsPage() {

@@ -13,7 +13,7 @@ import {
 import { api } from "../api.ts";
 import { askConfirm } from "./ConfirmDialog.tsx";
 
-const CAPABILITIES: Capability[] = ["text", "image", "embedding"];
+const CAPABILITIES: Capability[] = ["text", "image", "embedding", "decision"];
 
 export function billingLabel(m: Pick<CatalogModel, "billing" | "quotaMultiplier" | "source">): string {
   const base =
@@ -194,7 +194,7 @@ function CapabilitySection({ connection, capability }: { connection: Connection;
 
   const runTest = () => {
     if (!chosen) return;
-    const what = capability === "image" ? "generate one real image" : "send one short real request";
+    const what = capability === "image" ? "generate one real image" : capability === "decision" ? "ask one short real question" : "send one short real request";
     const cost =
       chosen.billing === "paid"
         ? "This model bills your paid balance."
@@ -263,4 +263,5 @@ function TestResultView({ result }: { result: TextTestResult | ImageTestResult }
   );
 }
 
-const titleOf = (c: Capability) => (c === "text" ? "Text models" : c === "image" ? "Image models" : "Embedding models");
+const titleOf = (c: Capability) =>
+  c === "text" ? "Text models" : c === "image" ? "Image models" : c === "decision" ? "Decision models" : "Embedding models";

@@ -3,7 +3,7 @@ import { z } from "zod";
 export const connectionKindSchema = z.enum(["codex-chatgpt", "nano-gpt", "openrouter", "openai-compatible"]);
 export type ConnectionKind = z.infer<typeof connectionKindSchema>;
 
-export const capabilitySchema = z.enum(["text", "image", "embedding"]);
+export const capabilitySchema = z.enum(["text", "image", "embedding", "decision"]);
 export type Capability = z.infer<typeof capabilitySchema>;
 
 /**
@@ -32,7 +32,7 @@ export const CONNECTION_KINDS: Record<ConnectionKind, ConnectionKindInfo> = {
     defaultBaseUrl: "https://chatgpt.com/backend-api/codex",
     needsApiKey: false,
     baseUrlEditable: false,
-    catalog: { text: "catalog", image: "builtin", embedding: "unsupported" },
+    catalog: { text: "catalog", image: "builtin", embedding: "unsupported", decision: "unsupported" },
     notes:
       "Uses the ChatGPT plan behind your local `codex login` (auth.json). This is the endpoint Codex itself uses, not the public OpenAI API, so OpenAI can change it without notice.",
   },
@@ -42,7 +42,7 @@ export const CONNECTION_KINDS: Record<ConnectionKind, ConnectionKindInfo> = {
     defaultBaseUrl: "https://nano-gpt.com/api/v1",
     needsApiKey: true,
     baseUrlEditable: true,
-    catalog: { text: "catalog", image: "catalog", embedding: "manual" },
+    catalog: { text: "catalog", image: "catalog", embedding: "manual", decision: "catalog" },
     notes: "Aggregator. The text catalog marks which models your subscription covers and which bill your balance.",
   },
   openrouter: {
@@ -51,7 +51,7 @@ export const CONNECTION_KINDS: Record<ConnectionKind, ConnectionKindInfo> = {
     defaultBaseUrl: "https://openrouter.ai/api/v1",
     needsApiKey: true,
     baseUrlEditable: true,
-    catalog: { text: "catalog", image: "catalog", embedding: "manual" },
+    catalog: { text: "catalog", image: "catalog", embedding: "manual", decision: "builtin" },
     notes: "Aggregator. Models with a zero price are marked free; everything else bills your credits.",
   },
   "openai-compatible": {
@@ -60,7 +60,7 @@ export const CONNECTION_KINDS: Record<ConnectionKind, ConnectionKindInfo> = {
     defaultBaseUrl: "",
     needsApiKey: true,
     baseUrlEditable: true,
-    catalog: { text: "catalog", image: "manual", embedding: "manual" },
+    catalog: { text: "catalog", image: "manual", embedding: "manual", decision: "unsupported" },
     notes:
       "Any endpoint with /models and /chat/completions. A similar endpoint does not guarantee every feature; test before relying on it.",
   },
@@ -124,7 +124,8 @@ export interface FetchModelsResult {
   models: CatalogModel[];
 }
 
-export const taskSchema = z.enum(["text", "image", "embedding"]);
+/** Tasks map one to one onto capabilities; "decision" is the judge of the quality audit. */
+export const taskSchema = z.enum(["text", "image", "embedding", "decision"]);
 export type Task = z.infer<typeof taskSchema>;
 
 export interface TaskAssignment {

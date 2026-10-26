@@ -1,5 +1,6 @@
 import type { AdventurePackage, CardDraft, LorebookDraft, Requirements } from "@adv/shared";
 import type { Embedder } from "../generation/embeddings.ts";
+import type { Decider } from "../generation/decisions.ts";
 import sharp from "sharp";
 import type { PortraitSettings } from "@adv/shared";
 import type { ImageGenerator } from "../generation/images.ts";
@@ -46,6 +47,8 @@ export interface StageContext {
    */
   revision(stageId: string): { notes: Array<{ round: number; note: string }>; previous: unknown };
   embedder: Embedder | null;
+  decider: Decider | null;
+  judgeThreshold: number;
   images: ImageGenerator | null;
   portraits: { settings: PortraitSettings; dir: string };
 }
@@ -372,6 +375,8 @@ export function buildStages(requirements: Requirements, plan: Plan | null, portr
         targets: fixTargets(p, assembled.package),
         text: ctx.text,
         embedder: ctx.embedder,
+        decider: ctx.decider,
+        judgeThreshold: ctx.judgeThreshold,
         repairAttempts: ctx.repairAttempts,
       });
     },

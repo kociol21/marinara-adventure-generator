@@ -201,6 +201,30 @@ describe("tests", () => {
     expect(requests[0]!.url).toBe("https://nano-gpt.com/v1/images/generations");
   });
 
+  it("lists Nano's decision models from its catalog, with subscription coverage", async () => {
+    await setup({
+      "GET nano-gpt.com/api/v1/models?detailed=true": () => ({
+        json: { data: [{ id: "glm-5" }, { id: "typesafe/jev-1.14", name: "TypeSafe Jev 1.14", subscription: { included: true, inputTokenMultiplier: 1 } }] },
+      }),
+    });
+    const conn = await create({ kind: "nano-gpt", name: "Nano", apiKey: "k" });
+    const res = await post(`/api/connections/${conn.id}/models/fetch`, { capability: "decision" });
+    expect(res.json().models).toEqual([expect.objectContaining({ modelId: "typesafe/jev-1.14", billing: "subscription" })]);
+  });
+
+  it("tests a decision model on the Decisions API and refuses it on Codex", async () => {
+    const { requests } = await setup({
+      "POST nano-gpt.com/api/v1/decisions": () => ({ json: { answers: { refund: { type: "noul", noul: 0.97 } } } }),
+    });
+    const conn = await create({ kind: "nano-gpt", name: "Nano", apiKey: "k" });
+    const res = await post(`/api/connections/${conn.id}/test-decision`, { modelId: "typesafe/jev-1.14", confirmUsage: true });
+    expect(res.json()).toMatchObject({ ok: true, reply: "yes with p = 0.97" });
+    expect(requests[0]!.url).toBe("https://nano-gpt.com/api/v1/decisions");
+    expect(requests[0]!.body).toMatchObject({ model: "typesafe/jev-1.14", questions: { refund: { type: "noul" } } });
+    const codex = await create({ kind: "codex-chatgpt", name: "ChatGPT" });
+    expect((await post(`/api/connections/${codex.id}/test-decision`, { modelId: "x", confirmUsage: true })).statusCode).toBe(400);
+  });
+
   it("returns a failed result instead of throwing when the provider errors", async () => {
     await setup({ "POST /chat/completions": () => ({ status: 429, json: { error: "rate limited" } }) });
     const conn = await create({ kind: "nano-gpt", name: "Nano", apiKey: "k" });

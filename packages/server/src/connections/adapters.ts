@@ -46,6 +46,15 @@ export interface CompletionRequest {
   timeoutMs?: number;
 }
 
+/** A typed question for a decision model (Decisions API: TypeSafe Jev and compatible). */
+export type DecisionQuestion =
+  | { type: "noul"; instructions: string }
+  | { type: "score"; instructions: string; criteria: string[] };
+
+export type DecisionAnswer =
+  | { type: "noul"; noul: number }
+  | { type: "score"; score: number; probabilities: Record<string, number>; confidence: number };
+
 export interface ProviderAdapter {
   support(capability: Capability): CatalogSupport;
   /** Reads the provider's model list. Never generates anything. */
@@ -58,6 +67,38 @@ export interface ProviderAdapter {
   generateImage(modelId: string, prompt: string): Promise<string>;
   /** Embedding vectors, one per text, in order. */
   embed(modelId: string, texts: string[]): Promise<number[][]>;
+  /** One Decisions API call: typed answers with probabilities, no generated text. */
+  decide(modelId: string, state: unknown, questions: Record<string, DecisionQuestion>): Promise<Record<string, DecisionAnswer>>;
+  testDecision(modelId: string): Promise<string>;
+}
+
+const DECISION_TEST = {
+  state: "Customer message: I was charged twice for the same order.",
+  questions: { refund: { type: "noul" as const, instructions: "Is the customer reporting a problem with a payment?" } },
+};
+
+/** Decision models both aggregators offer under the same id (no list endpoint for them). */
+const DECISION_MODELS = [
+  { id: "typesafe/jev-1.14", name: "TypeSafe Jev 1.14" },
+  { id: "typesafe/jev-latest", name: "TypeSafe Jev (latest)" },
+  { id: "typesafe/jev-1.13", name: "TypeSafe Jev 1.13" },
+];
+
+/** Reads a Decisions API response; anything malformed is an error, never a guessed value. */
+export function parseDecisionAnswers(json: unknown, keys: string[], label: string): Record<string, DecisionAnswer> {
+  const answers = isRecord(json) && isRecord(json.answers) ? json.answers : null;
+  const out: Record<string, DecisionAnswer> = {};
+  for (const key of keys) {
+    const a = answers && isRecord(answers[key]) ? answers[key] : null;
+    if (a?.type === "noul" && typeof a.noul === "number") out[key] = { type: "noul", noul: a.noul };
+    else if (a?.type === "score" && typeof a.score === "number") {
+      const probabilities = isRecord(a.probabilities)
+        ? Object.fromEntries(Object.entries(a.probabilities).filter((e): e is [string, number] => typeof e[1] === "number"))
+        : {};
+      out[key] = { type: "score", score: a.score, probabilities, confidence: typeof a.confidence === "number" ? a.confidence : 0 };
+    } else throw new ProviderError(`${label} returned no answer for one of the questions.`);
+  }
+  return out;
 }
 
 export interface AdapterDeps {
@@ -184,6 +225,27 @@ class OpenAICompatibleAdapter implements ProviderAdapter {
   testImage(modelId: string): Promise<string> {
     return this.generateImage(modelId, IMAGE_TEST_PROMPT);
   }
+
+  protected decisionsUrl(): string {
+    return joinUrl(this.baseUrl, "decisions");
+  }
+
+  async decide(modelId: string, state: unknown, questions: Record<string, DecisionQuestion>): Promise<Record<string, DecisionAnswer>> {
+    if (this.support("decision") === "unsupported") throw new ProviderError(`${this.label} has no decision models.`);
+    const json = await requestJson(
+      this.fetch,
+      this.decisionsUrl(),
+      { method: "POST", headers: this.headers(true), body: JSON.stringify({ model: modelId, state, questions }) },
+      { label: `${this.label} decision (${modelId})`, timeoutMs: 120_000 },
+    );
+    return parseDecisionAnswers(json, Object.keys(questions), `${this.label} (${modelId})`);
+  }
+
+  async testDecision(modelId: string): Promise<string> {
+    const answers = await this.decide(modelId, DECISION_TEST.state, DECISION_TEST.questions);
+    const a = answers.refund!;
+    return a.type === "noul" ? `yes with p = ${a.noul.toFixed(2)}` : "answered";
+  }
 }
 
 class NanoGptAdapter extends OpenAICompatibleAdapter {
@@ -214,6 +276,12 @@ class NanoGptAdapter extends OpenAICompatibleAdapter {
         .filter((m) => typeof m.id === "string")
         .map((m) => entry(m.id as string, typeof m.name === "string" ? m.name : (m.id as string)));
     }
+    if (capability === "decision") {
+      // Nano lists its decision models among the text models, with their subscription coverage.
+      const known = new Set(DECISION_MODELS.map((m) => m.id));
+      const listed = (await this.listModels("text")).filter((m) => known.has(m.modelId));
+      return listed.length ? listed : DECISION_MODELS.map((m) => entry(m.id, m.name, { source: "builtin", billing: "unknown" }));
+    }
     return [];
   }
 
@@ -227,8 +295,18 @@ class NanoGptAdapter extends OpenAICompatibleAdapter {
 }
 
 class OpenRouterAdapter extends OpenAICompatibleAdapter {
+  /** OpenRouter's Decisions API is under /api/alpha, beside the /api/v1 prefix. */
+  protected override decisionsUrl(): string {
+    const url = new URL(this.baseUrl);
+    const path = url.pathname.replace(/\/+$/, "");
+    url.pathname = path.endsWith("/api/v1") ? `${path.slice(0, -"/api/v1".length)}/api/alpha/decisions` : `${path}/decisions`;
+    return url.toString();
+  }
+
   override async listModels(capability: Capability): Promise<CatalogEntry[]> {
     if (capability === "embedding") return [];
+    // OpenRouter bills decision calls per input token; output is free.
+    if (capability === "decision") return DECISION_MODELS.map((m) => entry(m.id, m.name, { source: "builtin", billing: "paid" }));
     const path = capability === "image" ? "models?output_modalities=image" : "models";
     const json = await requestJson(this.fetch, joinUrl(this.baseUrl, path), { headers: this.headers() }, {
       label: `${this.label} ${capability} model list`,
@@ -355,6 +433,15 @@ class CodexAdapter implements ProviderAdapter {
     return Promise.reject(new ProviderError("ChatGPT (Codex login) has no embedding models."));
   }
 
+  decide(): Promise<Record<string, DecisionAnswer>> {
+    return Promise.reject(new ProviderError("ChatGPT (Codex login) has no decision models."));
+  }
+
+  async testDecision(): Promise<string> {
+    await this.decide();
+    return "";
+  }
+
   async generateImage(modelId: string, prompt: string): Promise<string> {
     const auth = await this.auth.get();
     const json = await requestJson(
@@ -404,6 +491,16 @@ export async function runImageTest(adapter: ProviderAdapter, modelId: string): P
   try {
     const imageDataUrl = await adapter.testImage(modelId);
     return { ok: true, modelId, latencyMs: Date.now() - start, imageDataUrl };
+  } catch (error) {
+    return { ok: false, modelId, latencyMs: Date.now() - start, error: errorMessage(error) };
+  }
+}
+
+export async function runDecisionTest(adapter: ProviderAdapter, modelId: string): Promise<TextTestResult> {
+  const start = Date.now();
+  try {
+    const reply = await adapter.testDecision(modelId);
+    return { ok: true, modelId, latencyMs: Date.now() - start, reply };
   } catch (error) {
     return { ok: false, modelId, latencyMs: Date.now() - start, error: errorMessage(error) };
   }

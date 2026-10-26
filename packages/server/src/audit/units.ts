@@ -1,4 +1,5 @@
 import type { AdventurePackage, AuditArea, AuditSeverity } from "@adv/shared";
+import type { JudgeOutput } from "./judge.ts";
 
 /** One piece of text in the package, with the stage that wrote it (the place to fix it). */
 export interface TextUnit {
@@ -33,6 +34,8 @@ export interface AuditOutput {
   findings: AuditFinding[];
   checked: string[];
   notChecked: string[];
+  /** Decision-model scores per part; absent in audits made before the judge existed. */
+  judge?: JudgeOutput | null;
 }
 
 const CARD_FIELDS = ["description", "personality", "backstory", "appearance", "scenario"] as const;
