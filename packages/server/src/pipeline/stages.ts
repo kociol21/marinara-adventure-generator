@@ -1,6 +1,7 @@
 import type { AdventurePackage, CardDraft, LorebookDraft, Requirements } from "@adv/shared";
 import type { Embedder } from "../generation/embeddings.ts";
 import type { Decider } from "../generation/decisions.ts";
+import { createHash } from "node:crypto";
 import sharp from "sharp";
 import type { PortraitSettings } from "@adv/shared";
 import type { ImageGenerator } from "../generation/images.ts";
@@ -42,6 +43,8 @@ export interface StageContext {
   repairAttempts: number;
   /** Output of a finished dependency. */
   output<T>(stageId: string): T;
+  /** The stage's own last output, if any, while it runs again. */
+  previousOutput<T>(stageId: string): T | null;
   has(stageId: string): boolean;
   /**
    * Audit fix notes for a stage, oldest first, and its previous output when only the notes changed
@@ -417,14 +420,23 @@ export function buildStages(requirements: Requirements, plan: Plan | null, portr
     id: "title",
     label: "Adventure title",
     deps: ["plan", "opening"],
-    run: (ctx) =>
-      llmStage(
+    run: async (ctx) => {
+      const plan = ctx.output<Plan>("plan");
+      const teaser = ctx.output<Opening>("opening").teaser;
+      // The title reads only the requirements, plan and teaser. Keep it when none changed, so an audit fix
+      // or a change request to the opening scene does not rename the adventure.
+      const basedOn = createHash("sha256").update(JSON.stringify([ctx.requirements, plan, teaser, ctx.title, ctx.rejectedTitles])).digest("hex");
+      const previous = ctx.previousOutput<TitleOutput & { basedOn?: string }>("title");
+      if (previous?.basedOn === basedOn && ctx.revision("title").player.now.length === 0) return previous;
+      const out = await llmStage(
         ctx,
         "title",
         titleSchema,
-        titlePrompt(ctx.requirements, ctx.output<Plan>("plan"), ctx.output<Opening>("opening").teaser, ctx.title, ctx.rejectedTitles),
+        titlePrompt(ctx.requirements, plan, teaser, ctx.title, ctx.rejectedTitles),
         (o) => (o.title.toLowerCase() === ctx.title.trim().toLowerCase() ? ["The title repeats the working label; write a new title."] : []),
-      ),
+      );
+      return { ...out, basedOn };
+    },
     summary: (o) => `“${(o as TitleOutput).title}”`,
   });
 

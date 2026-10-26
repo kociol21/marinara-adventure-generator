@@ -310,6 +310,7 @@ export function createPipeline(deps: Deps) {
         judgeThreshold: deps.settings.get().judgeThreshold,
         images: deps.images ?? null,
         portraits: { settings: deps.projects.portraits(projectId), dir: deps.portraitsDir ?? "portraits" },
+        previousOutput: <T>(id: string) => (rows.get(id)?.output ?? null) as T | null,
         output: <T>(id: string) => {
           const row = rows.get(id);
           if (row?.status !== "done") throw new Error(`Stage ${id} has no result.`);

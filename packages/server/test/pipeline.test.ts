@@ -207,6 +207,24 @@ describe("generation pipeline", () => {
     expect(state.stages.find((s) => s.id === "assemble")?.acceptsNote).toBe(false);
   });
 
+  it("keeps the title when a change to the opening leaves the teaser as it was", async () => {
+    const { id, stageCalls } = await setup((stage, _sub, attempt) =>
+      stage === "opening" && attempt > 1 ? JSON.stringify({ ...fixture.opening, openingMessage: `${fixture.opening.openingMessage} Shorter now.` }) : undefined,
+    );
+    await runToEnd(id);
+    const before = stageCalls().length;
+    await app.inject({ method: "POST", url: `/api/projects/${id}/generation/stages/opening/retry`, headers: write, payload: { confirmUsage: true, note: "Shorter." } });
+    await pipeline().idle(id);
+    const after = stageCalls().slice(before);
+    expect(after[0]).toBe("opening");
+    // The package changed, so it is audited again, but the title is kept without a request.
+    expect(after).toContain("audit-review");
+    expect(after).not.toContain("title");
+    const state = (await app.inject({ method: "GET", url: `/api/projects/${id}/generation`, headers: { host } })).json() as GenerationState;
+    expect(state.ready).toBe(true);
+    expect(state.title).toBe("The Lamp Beneath the Pier");
+  });
+
   it("refuses notes for stages the model does not write", async () => {
     const { id } = await setup();
     await runToEnd(id);
