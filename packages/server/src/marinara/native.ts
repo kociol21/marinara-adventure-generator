@@ -55,7 +55,12 @@ function envelope<T extends Record<string, unknown>>(type: NativeType, data: T, 
   return { type, version: 1, exportedAt, data };
 }
 
-export function nativeCharacter(card: CardDraft, adventureTitle: string, exportedAt: string): NativeEnvelope {
+/**
+ * Marinara's chat setup posts the first message of every card added to a new chat. Only the opening
+ * card may greet, so the other cards' entrances move to alternate greetings (still there for a solo chat).
+ */
+export function nativeCharacter(card: CardDraft, adventureTitle: string, exportedAt: string, opens = true): NativeEnvelope {
+  const greetings = opens || !card.firstMessage.trim() ? card.alternateGreetings : [card.firstMessage, ...card.alternateGreetings];
   return envelope(
     "marinara_character",
     {
@@ -66,9 +71,9 @@ export function nativeCharacter(card: CardDraft, adventureTitle: string, exporte
         description: card.description,
         personality: card.personality,
         scenario: card.scenario,
-        first_mes: card.firstMessage,
+        first_mes: opens ? card.firstMessage : "",
         mes_example: card.exampleDialogue,
-        alternate_greetings: card.alternateGreetings,
+        alternate_greetings: greetings,
         tags: [...new Set([...card.tags, privateTag(adventureTitle, card.key)])],
         creator: GENERATOR_NAME,
         creator_notes: "",
@@ -191,7 +196,7 @@ export interface NativeFiles {
 
 export function toNative(pkg: AdventurePackage, exportedAt = new Date().toISOString()): NativeFiles {
   return {
-    characters: pkg.characters.map((card) => ({ card, envelope: nativeCharacter(card, pkg.title, exportedAt) })),
+    characters: pkg.characters.map((card) => ({ card, envelope: nativeCharacter(card, pkg.title, exportedAt, card.key === pkg.openingCardKey) })),
     persona: pkg.persona ? nativePersona(pkg.persona, exportedAt) : null,
     lorebooks: pkg.lorebooks.map((lorebook) => ({ lorebook, envelope: nativeLorebook(lorebook, pkg.title, exportedAt) })),
   };

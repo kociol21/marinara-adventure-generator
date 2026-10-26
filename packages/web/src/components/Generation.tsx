@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { GenerationState, StageView } from "@adv/shared";
 import { api } from "../api.ts";
 import { AuditReport } from "./AuditReport.tsx";
+import { ExportPanel } from "./ExportPanel.tsx";
 import { Portraits } from "./Portraits.tsx";
 
 const ICON: Record<StageView["status"], string> = {
@@ -115,11 +116,7 @@ export function Generation({ projectId }: { projectId: string }) {
           <button onClick={() => confirmRun(started ? "Resume generation?" : "Start generating the adventure?", () => start.mutate())}>
             {failed ? "Retry from the failed stage" : started ? "Resume" : "Generate adventure"}
           </button>
-        ) : (
-          <a className="button" href={`/api/projects/${projectId}/export`} download>
-            Download for Marinara (.zip)
-          </a>
-        )}
+        ) : null}
       </div>
       {(start.isError || retry.isError) && <p className="error">{(start.error ?? retry.error)?.message}</p>}
 
@@ -141,6 +138,10 @@ export function Generation({ projectId }: { projectId: string }) {
         />
       )}
       {rerunAudit.isError && <p className="error">{rerunAudit.error.message}</p>}
+
+      {s.ready && !s.running && (
+        <ExportPanel projectId={projectId} stamp={s.stages.map((st) => `${st.id}:${st.finishedAt}`).join("|")} />
+      )}
 
       {s.ready && s.warnings.length > 0 && (
         <div className="assumptions">

@@ -9,6 +9,7 @@ import { GenerationError, type TextGenerator } from "../generation/text.ts";
 import { PROMPT_VERSION } from "./prompts.ts";
 import { buildStages, FIXABLE_STAGE, type AvatarOutput, PackageInvalidError, type AssembleOutput, type StageContext, type StageDef } from "./stages.ts";
 import type { AuditOutput } from "../audit/units.ts";
+import { describeTrials, runActivationTrials } from "../audit/activation-trials.ts";
 import type { Embedder } from "../generation/embeddings.ts";
 import type { ImageGenerator } from "../generation/images.ts";
 import { portraitDataUrl } from "./portraits.ts";
@@ -122,12 +123,16 @@ export function createPipeline(deps: Deps) {
     const of = (severity: string) => issues.filter((i) => i.severity === severity).map((i) => i.summary);
     const auditRow = rows.get("audit");
     const auditOut = auditRow?.status === "done" ? (auditRow.output as AuditOutput) : null;
+    const scope = auditOut ? portraitScope(rows, auditOut, deps.projects.portraits(projectId).enabled, !!deps.images?.describe()) : null;
+    // Trigger trials are code-only, so they run on the current package for every report.
+    const trials = auditOut && ready ? runActivationTrials((assembled!.output as AssembleOutput).package) : null;
+    if (scope && trials) scope.checked.push(describeTrials(trials));
     const audit: AuditReportView | null = auditOut
       ? {
           fixRounds: deps.stages.fixRounds(projectId, hashBase),
           maxFixRounds: deps.settings.get().maxAutoFixAttempts,
-          ...portraitScope(rows, auditOut, deps.projects.portraits(projectId).enabled, !!deps.images?.describe()),
-          findings: auditOut.findings.map((f) => ({
+          ...scope!,
+          findings: [...auditOut.findings, ...(trials?.findings ?? [])].map((f) => ({
             id: f.id,
             area: f.area,
             severity: f.severity,
@@ -284,6 +289,24 @@ export function createPipeline(deps: Deps) {
         if (avatar) pkg.persona.avatar = avatar;
       }
       return { ...assembled, package: pkg };
+    },
+
+    /** Everything besides the package that the bundle reports on; the QA report never carries details. */
+    exportContext(projectId: string) {
+      const s = state(projectId);
+      const current = deps.interview.current(projectId);
+      const rows = deps.stages.all(projectId);
+      const portraitChecks: Record<string, AvatarOutput["check"]> = {};
+      for (const st of s.stages) {
+        const row = rows.get(st.id);
+        if (st.id.startsWith("avatar:") && row?.status === "done") portraitChecks[st.id.slice("avatar:".length)] = (row.output as AvatarOutput).check;
+      }
+      return {
+        audit: s.audit ? { ...s.audit, findings: s.audit.findings.map(({ detail: _detail, ...f }) => f) } : null,
+        requirements: current?.requirements ?? null,
+        requirementsApprovedAt: current?.approvedAt ?? null,
+        portraitChecks,
+      };
     },
 
     assembled(projectId: string): AssembleOutput | null {

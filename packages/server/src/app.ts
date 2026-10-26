@@ -91,7 +91,7 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
       await api.register(healthRoutes, { dataDir: deps.dataDir, secretStore: deps.secretStore.kind });
       await api.register(projectRoutes, { prefix: "/projects", projects: repos.projects, portraitsDir });
       await api.register(interviewRoutes, { prefix: "/projects", projects: repos.projects, interview });
-      await api.register(generationRoutes, { prefix: "/projects", pipeline });
+      await api.register(generationRoutes, { prefix: "/projects", pipeline, secrets: repos.secrets });
       await api.register(portraitRoutes, { prefix: "/projects", projects: repos.projects, stages: stagesRepo, images, portraitsDir });
       await api.register(settingsRoutes, { prefix: "/settings", settings: repos.settings });
       await api.register(secretRoutes, { prefix: "/secrets", secrets: repos.secrets });
