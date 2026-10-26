@@ -7,7 +7,7 @@ import type { SettingsRepo } from "../repos/settings.ts";
 import type { StageRow, StagesRepo } from "../repos/stages.ts";
 import { GenerationError, type TextGenerator } from "../generation/text.ts";
 import { PROMPT_VERSION } from "./prompts.ts";
-import { buildStages, FIXABLE_STAGE, type AvatarOutput, PackageInvalidError, type AssembleOutput, type StageContext, type StageDef } from "./stages.ts";
+import { buildStages, FIXABLE_STAGE, type AvatarOutput, PackageInvalidError, retitle, type AssembleOutput, type StageContext, type StageDef } from "./stages.ts";
 import type { AuditOutput } from "../audit/units.ts";
 import { describeTrials, runActivationTrials } from "../audit/activation-trials.ts";
 import type { Embedder } from "../generation/embeddings.ts";
@@ -15,7 +15,7 @@ import type { Decider } from "../generation/decisions.ts";
 import type { JudgeOutput } from "../audit/judge.ts";
 import type { ImageGenerator } from "../generation/images.ts";
 import { portraitDataUrl } from "./portraits.ts";
-import type { Opening, Plan } from "./schemas.ts";
+import type { Opening, Plan, TitleOutput } from "./schemas.ts";
 
 export class PipelineError extends Error {
   constructor(
@@ -154,7 +154,7 @@ export function createPipeline(deps: Deps) {
     const current = deps.interview.current(projectId);
     const rows = deps.stages.all(projectId);
     if (!project || !current?.approvedAt) {
-      return { running: jobs.has(projectId), stages: [], warnings: [], notes: [], ready: false, audit: null };
+      return { running: jobs.has(projectId), stages: [], warnings: [], notes: [], ready: false, audit: null, title: null };
     }
     const hashBase = sha(current.requirements);
     const defs = definitions(projectId, current.requirements, rows);
@@ -224,7 +224,9 @@ export function createPipeline(deps: Deps) {
           })),
         }
       : null;
-    return { running: jobs.has(projectId), stages, warnings: of("warning"), notes: of("info"), ready, audit };
+    const titleRow = rows.get("title");
+    const title = stages.find((s) => s.id === "title")?.status === "done" ? (titleRow!.output as TitleOutput).title : null;
+    return { running: jobs.has(projectId), stages, warnings: of("warning"), notes: of("info"), ready, audit, title };
   }
 
   async function run(projectId: string, job: { cancelled: boolean }): Promise<void> {
@@ -282,6 +284,7 @@ export function createPipeline(deps: Deps) {
           const sameBase = !!def && !!row?.output && row.baseHash === inputHash(def, hashBase, project.title, rows, NO_NOTES);
           return { notes: stageNotes, previous: sameBase ? row!.output : null };
         },
+        rejectedTitles: deps.projects.rejectedNames(projectId),
         embedder: deps.embedder ?? null,
         decider: deps.decider ?? null,
         judgeThreshold: deps.settings.get().judgeThreshold,
@@ -306,6 +309,7 @@ export function createPipeline(deps: Deps) {
         const judged = next.id === "audit" ? (output as AuditOutput).judge : null;
         if (judged) recordJudge(projectId, hashBase, judged, rows);
         if (next.id === "opening") deps.projects.update(projectId, { teaser: (output as Opening).teaser });
+        if (next.id === "title") deps.projects.setName(projectId, (output as TitleOutput).title);
       } catch (error) {
         const { message, detail } = describeFailure(error);
         if (!(error instanceof GenerationError) && !(error instanceof PackageInvalidError)) deps.log?.error(error, "Stage %s failed", next.id);
@@ -344,6 +348,9 @@ export function createPipeline(deps: Deps) {
       if (jobs.has(projectId)) throw new PipelineError("Generation is already running.", 409);
       const rows = deps.stages.all(projectId);
       if (!rows.has(stageId)) throw new PipelineError("Unknown stage.", 404);
+      // A new title must differ from the one the player is replacing.
+      const replaced = stageId === "title" ? (rows.get("title")?.output as TitleOutput | null)?.title : null;
+      if (replaced) deps.projects.rejectName(projectId, replaced);
       deps.stages.invalidate(projectId, stageId);
       // A deliberate rewrite must not be swapped back for an earlier, better-scored version.
       deps.stages.clearJudgeBest(projectId, stageId === "plan" ? null : stageId);
@@ -409,7 +416,8 @@ export function createPipeline(deps: Deps) {
     assembled(projectId: string): AssembleOutput | null {
       const s = state(projectId);
       if (!s.ready) return null;
-      return deps.stages.all(projectId).get("assemble")!.output as AssembleOutput;
+      const out = deps.stages.all(projectId).get("assemble")!.output as AssembleOutput;
+      return s.title ? retitle(out, s.title) : out;
     },
 
     /** For tests and shutdown. */

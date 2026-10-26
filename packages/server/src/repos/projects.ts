@@ -12,6 +12,7 @@ import type { Db } from "../db/database.ts";
 interface ProjectRow {
   id: string;
   title: string;
+  name: string;
   status: ProjectStatus;
   teaser: string;
   created_at: string;
@@ -21,6 +22,7 @@ interface ProjectRow {
 const toProject = (row: ProjectRow): Project => ({
   id: row.id,
   title: row.title,
+  name: row.name,
   status: row.status,
   teaser: row.teaser,
   createdAt: row.created_at,
@@ -73,6 +75,21 @@ export function createProjectsRepo(db: Db) {
 
     setPortraits(id: string, settings: PortraitSettings): void {
       db.prepare("UPDATE project SET portraits = ?, updated_at = ? WHERE id = ?").run(JSON.stringify(settings), new Date().toISOString(), id);
+    },
+
+    setName(id: string, name: string): void {
+      db.prepare("UPDATE project SET name = ?, updated_at = ? WHERE id = ?").run(name, new Date().toISOString(), id);
+    },
+
+    /** Titles the player replaced, oldest first. */
+    rejectedNames(id: string): string[] {
+      const row = db.prepare("SELECT rejected_names FROM project WHERE id = ?").get(id) as { rejected_names: string } | undefined;
+      return row ? (JSON.parse(row.rejected_names) as string[]) : [];
+    },
+
+    rejectName(id: string, name: string): void {
+      const names = [...this.rejectedNames(id).filter((n) => n !== name), name].slice(-20);
+      db.prepare("UPDATE project SET rejected_names = ? WHERE id = ?").run(JSON.stringify(names), id);
     },
 
     setStatus(id: string, status: ProjectStatus): void {

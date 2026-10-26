@@ -173,4 +173,10 @@ export const migrations: string[] = [
     PRIMARY KEY (project_id, basis, stage)
   );
   `,
+  `
+  -- The adventure's own title, written by the title stage ('' until then), and titles the player
+  -- asked to replace, so a regenerated title does not repeat them.
+  ALTER TABLE project ADD COLUMN name TEXT NOT NULL DEFAULT '';
+  ALTER TABLE project ADD COLUMN rejected_names TEXT NOT NULL DEFAULT '[]';
+  `,
 ];

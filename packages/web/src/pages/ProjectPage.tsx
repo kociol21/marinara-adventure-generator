@@ -77,14 +77,20 @@ export function ProjectPage() {
 
   return (
     <section>
-      <h1>{project.data.title}</h1>
+      <h1>{project.data.name || project.data.title}</h1>
       <div className="row">
-        <input aria-label="Adventure title" value={title} maxLength={200} onChange={(e) => setTitle(e.target.value)} />
+        <input aria-label="Working title" value={title} maxLength={200} onChange={(e) => setTitle(e.target.value)} />
         <button disabled={!dirty || rename.isPending} onClick={() => rename.mutate(title.trim())}>
           Rename
         </button>
       </div>
       {rename.isError && <p className="error">Rename failed: {rename.error.message}</p>}
+      {project.data.name && (
+        <p className="muted small">
+          Working title. The adventure itself is called “{project.data.name}”; get a new one on the Export tab. Renaming the
+          working title makes the generated adventure out of date.
+        </p>
+      )}
 
       <dl className="facts">
         <dt>Status</dt>

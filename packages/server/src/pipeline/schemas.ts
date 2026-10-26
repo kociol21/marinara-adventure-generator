@@ -125,3 +125,6 @@ export const openingSchema = z.object({
   secretPlot: secretPlotSeedSchema,
 });
 export type Opening = z.infer<typeof openingSchema>;
+
+export const titleSchema = z.object({ title: z.string().trim().min(1).max(80) });
+export type TitleOutput = z.infer<typeof titleSchema>;

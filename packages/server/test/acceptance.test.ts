@@ -148,8 +148,8 @@ describe("export through the app", () => {
 
     const zip = readZip((await app.inject({ method: "GET", url: `/api/projects/${id}/export`, headers: { host } })).rawPayload);
     const names = [...zip.keys()];
-    for (const f of ["START-HERE.md", "requirements.md", "qa-report.md", "manifest.json"]) expect(names).toContain(`probe-case/${f}`);
-    const sheet = zip.get("probe-case/requirements.md")!.toString();
+    for (const f of ["START-HERE.md", "requirements.md", "qa-report.md", "manifest.json"]) expect(names).toContain(`the-lamp-beneath-the-pier/${f}`);
+    const sheet = zip.get("the-lamp-beneath-the-pier/requirements.md")!.toString();
     expect(sheet).toContain("Neutral probe pitch.");
     expect(sheet).toContain("noir detective mystery");
   });

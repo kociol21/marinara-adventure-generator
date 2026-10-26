@@ -260,7 +260,7 @@ describe("audit stage", () => {
     expect(state.audit).toMatchObject({ findings: [], fixRounds: 0, maxFixRounds: 2 });
     expect(state.audit!.notChecked.join(" ")).toMatch(/no embedding model assigned/);
     const zip = readZip((await app.inject({ method: "GET", url: `/api/projects/${id}/export`, headers: { host } })).rawPayload);
-    expect(zip.get("probe-case/qa-report.md")!.toString()).toMatch(/no open findings/);
+    expect(zip.get("the-lamp-beneath-the-pier/qa-report.md")!.toString()).toMatch(/no open findings/);
   });
 
   it("sends a major finding back to its stage, with a round limit, and hides details", async () => {
@@ -288,7 +288,7 @@ describe("audit stage", () => {
     expect(chats.filter((r) => stageOf(r).sub === "alpha")).toHaveLength(1);
 
     const zip = readZip((await app.inject({ method: "GET", url: `/api/projects/${id}/export`, headers: { host } })).rawPayload);
-    const report = zip.get("probe-case/qa-report.md")!.toString();
+    const report = zip.get("the-lamp-beneath-the-pier/qa-report.md")!.toString();
     expect(report).toMatch(/1 open findings \(1 major\)/);
     expect(report).toContain("Card: Probe Beta");
     expect(report).not.toContain("HIDDEN_DETAIL");

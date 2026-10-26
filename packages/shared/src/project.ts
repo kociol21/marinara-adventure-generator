@@ -6,7 +6,10 @@ export type ProjectStatus = z.infer<typeof projectStatusSchema>;
 
 export const projectSchema = z.object({
   id: z.string(),
+  /** Working title the player typed; it labels the project until the adventure has its own title. */
   title: z.string(),
+  /** Title chosen by the title stage, used in exports and Marinara; empty until generated. */
+  name: z.string(),
   status: projectStatusSchema,
   /** Spoiler-free teaser; the only story text the library ever shows. */
   teaser: z.string(),
@@ -42,6 +45,8 @@ export interface GenerationState {
   notes: string[];
   /** Quality audit of the latest assembled package, when it has run. */
   audit: AuditReportView | null;
+  /** The adventure's generated title, when its stage is done and current. */
+  title: string | null;
   ready: boolean;
 }
 

@@ -49,7 +49,7 @@ export function LibraryPage() {
         {projects.data?.map((project) => (
           <li key={project.id} className="card">
             <Link to={`/projects/${project.id}`}>
-              <strong>{project.title}</strong>
+              <strong>{project.name || project.title}</strong>
             </Link>
             <span className={`badge badge-${project.status}`}>{project.status}</span>
             <p className="muted">{project.teaser || "No teaser yet."}</p>

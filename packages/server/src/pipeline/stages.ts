@@ -27,8 +27,10 @@ import {
   type LorebookOutput,
   type Opening,
   type Plan,
+  titleSchema,
+  type TitleOutput,
 } from "./schemas.ts";
-import { cardPrompt, cluesPrompt, factsPrompt, lorebookPrompt, narrativeVoiceEntry, openingPrompt, personaPrompt, planPrompt } from "./prompts.ts";
+import { cardPrompt, cluesPrompt, factsPrompt, lorebookPrompt, narrativeVoiceEntry, openingPrompt, personaPrompt, planPrompt, titlePrompt } from "./prompts.ts";
 import { z } from "zod";
 import { scaleTargets, wordCount } from "./scale.ts";
 
@@ -46,6 +48,8 @@ export interface StageContext {
    * since that output was written (then the stage edits it instead of starting over).
    */
   revision(stageId: string): { notes: Array<{ round: number; note: string }>; previous: unknown };
+  /** Titles the player replaced; the title stage avoids them. */
+  rejectedTitles: string[];
   embedder: Embedder | null;
   decider: Decider | null;
   judgeThreshold: number;
@@ -386,6 +390,23 @@ export function buildStages(requirements: Requirements, plan: Plan | null, portr
     },
   });
 
+  // The title comes after the audit and nothing depends on it: a new title never re-assembles or
+  // re-audits the package. It is applied to the package on export and push.
+  stages.push({
+    id: "title",
+    label: "Adventure title",
+    deps: ["plan", "opening"],
+    run: (ctx) =>
+      llmStage(
+        ctx,
+        "title",
+        titleSchema,
+        titlePrompt(ctx.requirements, ctx.output<Plan>("plan"), ctx.output<Opening>("opening").teaser, ctx.title, ctx.rejectedTitles),
+        (o) => (o.title.toLowerCase() === ctx.title.trim().toLowerCase() ? ["The title repeats the working label; write a new title."] : []),
+      ),
+    summary: (o) => `“${(o as TitleOutput).title}”`,
+  });
+
   // Portraits come last and stand alone: re-rendering one never re-assembles or re-audits the package.
   if (portraits?.settings.enabled && portraits.available) {
     const version = portraitSettingsKey(portraits.settings);
@@ -527,6 +548,21 @@ export function withWholeWordsForShortKeys<E extends { keys: string[]; secondary
   if (entry.useRegex || entry.matchWholeWords) return entry;
   const short = [...entry.keys, ...entry.secondaryKeys].some((k) => k.trim().length <= SHORT_KEY_LENGTH);
   return short ? { ...entry, matchWholeWords: true } : entry;
+}
+
+/** The package under its generated title: the package title and the lorebook names that carry it. */
+export function retitle(out: AssembleOutput, title: string): AssembleOutput {
+  const pkg = out.package;
+  if (pkg.title === title) return out;
+  const prefix = `${pkg.title}: `;
+  return {
+    ...out,
+    package: {
+      ...pkg,
+      title,
+      lorebooks: pkg.lorebooks.map((lb) => (lb.name.startsWith(prefix) ? { ...lb, name: `${title}: ${lb.name.slice(prefix.length)}` } : lb)),
+    },
+  };
 }
 
 export function assemble(ctx: StageContext): AssembleOutput {

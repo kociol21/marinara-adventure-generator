@@ -107,7 +107,30 @@ export function Generation({ projectId, view = "generation" }: { projectId: stri
     return (
       <div className="panel">
         {s.ready && !s.running ? (
-          <ExportPanel projectId={projectId} stamp={s.stages.map((st) => `${st.id}:${st.finishedAt}`).join("|")} />
+          <>
+            {s.title && (
+              <div className="subpanel">
+                <h3>Title</h3>
+                <p>
+                  <strong>{s.title}</strong>
+                </p>
+                <p className="muted small">Used for the export files, the Marinara chat, its folders and the lorebook names.</p>
+                <button
+                  className="secondary"
+                  disabled={retry.isPending}
+                  onClick={() =>
+                    void askConfirm(
+                      "Write a new title? This is one short request to your Text generation model (quota or credits). The current title will not be offered again.",
+                    ).then((ok) => ok && retry.mutate("title"))
+                  }
+                >
+                  New title
+                </button>
+                {retry.isError && <p className="error">{retry.error.message}</p>}
+              </div>
+            )}
+            <ExportPanel projectId={projectId} stamp={s.stages.map((st) => `${st.id}:${st.finishedAt}`).join("|")} />
+          </>
         ) : (
           <p className="muted small">Export and Push to Marinara open once generation is finished.</p>
         )}

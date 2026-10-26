@@ -123,11 +123,11 @@ describe("portrait stages", () => {
     expect((await sharp(img.rawPayload).metadata()).width).toBe(768);
 
     const zip = readZip((await app.inject({ method: "GET", url: `/api/projects/${id}/export`, headers: { host } })).rawPayload);
-    const alpha = JSON.parse(zip.get("probe-case/characters/probe-alpha.marinara.json")!.toString());
+    const alpha = JSON.parse(zip.get("the-lamp-beneath-the-pier/characters/probe-alpha.marinara.json")!.toString());
     expect(alpha.data.avatar).toMatch(/^data:image\/webp;base64,/);
     const embedded = await sharp(Buffer.from(alpha.data.avatar.split(",")[1], "base64")).metadata();
     expect([embedded.format, embedded.width]).toEqual(["webp", 768]);
-    const persona = JSON.parse(zip.get("probe-case/persona/probe-investigator.marinara.json")!.toString());
+    const persona = JSON.parse(zip.get("the-lamp-beneath-the-pier/persona/probe-investigator.marinara.json")!.toString());
     expect(persona.data.avatar).toMatch(/^data:image\/webp;base64,/);
     expect(state.audit!.checked.join(" ")).toMatch(/Portraits against Appearance and style \(vision review\): 3 match/);
   });
@@ -167,7 +167,7 @@ describe("portrait stages", () => {
     expect(off.ready).toBe(true);
     expect(off.stages.some((s) => s.id.startsWith("avatar:"))).toBe(false);
     const zip = readZip((await app.inject({ method: "GET", url: `/api/projects/${id}/export`, headers: { host } })).rawPayload);
-    expect(JSON.parse(zip.get("probe-case/characters/probe-alpha.marinara.json")!.toString()).data.avatar).toBeUndefined();
+    expect(JSON.parse(zip.get("the-lamp-beneath-the-pier/characters/probe-alpha.marinara.json")!.toString()).data.avatar).toBeUndefined();
   });
 
   it("deletes portrait files with the project", async () => {

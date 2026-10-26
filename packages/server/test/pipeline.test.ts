@@ -62,7 +62,7 @@ async function setup(override?: Override) {
   const id = (await app.inject({ method: "POST", url: "/api/projects", headers: write, payload: { title: "Probe Case" } })).json().id as string;
   await approve(id, requirements);
   const stageCalls = () => fake.requests.filter((r) => r.url.includes("chat/completions")).map((r) => stageOf(r).id);
-  return { id, stageCalls };
+  return { id, stageCalls, requests: fake.requests };
 }
 
 async function approve(id: string, req: typeof requirements) {
@@ -93,6 +93,7 @@ const LLM_STAGES = [
   "opening",
   "audit-review",
   "audit-spoilers",
+  "title",
 ];
 
 afterEach(async () => {
@@ -114,24 +115,25 @@ describe("generation pipeline", () => {
     const { id, stageCalls } = await setup();
     const state = await runToEnd(id);
     expect(state.ready).toBe(true);
-    expect(state.stages.map((s) => s.id)).toEqual([...LLM_STAGES.slice(0, 10), "assemble", "audit"]);
+    expect(state.stages.map((s) => s.id)).toEqual([...LLM_STAGES.slice(0, 10), "assemble", "audit", "title"]);
     expect(state.stages.every((s) => s.status === "done")).toBe(true);
     expect(stageCalls()).toEqual(LLM_STAGES);
 
     const project = (await app.inject({ method: "GET", url: `/api/projects/${id}`, headers: { host } })).json();
-    expect(project).toMatchObject({ status: "ready", teaser: fixture.opening.teaser });
+    expect(project).toMatchObject({ status: "ready", teaser: fixture.opening.teaser, title: "Probe Case", name: "The Lamp Beneath the Pier" });
+    expect(state.title).toBe("The Lamp Beneath the Pier");
 
     const assembled = pipeline().assembled(id)!;
     const alpha = assembled.package.characters.find((c) => c.key === "alpha")!;
     expect(alpha.firstMessage).toBe("OPENING_MESSAGE_ALPHA");
-    expect(assembled.package.lorebooks.map((l) => l.name)).toEqual(["Probe Case: World", "Probe Case: Characters", "Probe Case: Plot"]);
+    expect(assembled.package.lorebooks.map((l) => l.name)).toEqual(["The Lamp Beneath the Pier: World", "The Lamp Beneath the Pier: Characters", "The Lamp Beneath the Pier: Plot"]);
     expect(assembled.package.secretPlot?.description).toBe("SECRET_PLOT_ARC");
 
     const zipRes = await app.inject({ method: "GET", url: `/api/projects/${id}/export`, headers: { host } });
     expect(zipRes.statusCode).toBe(200);
     expect(zipRes.headers["content-type"]).toBe("application/zip");
     const files = readZip(zipRes.rawPayload);
-    expect([...files.keys()]).toContain("probe-case/lorebooks/probe-case-plot.marinara.json");
+    expect([...files.keys()]).toContain("the-lamp-beneath-the-pier/lorebooks/the-lamp-beneath-the-pier-plot.marinara.json");
     expect([...files.values()].map((b) => b.toString()).join("")).not.toContain("SECRET_PLOT_ARC");
   });
 
@@ -166,6 +168,7 @@ describe("generation pipeline", () => {
       "opening",
       "audit-review",
       "audit-spoilers",
+      "title",
     ]);
   });
 
@@ -177,6 +180,25 @@ describe("generation pipeline", () => {
     expect(state.ready).toBe(true);
     // The fixture returns the same card, so its output hash is unchanged and the opening is reused.
     expect(stageCalls().slice(before)).toEqual(["card:alpha"]);
+  });
+
+  it("writes a new title on request without touching the package, and avoids the replaced one", async () => {
+    const { id, stageCalls, requests } = await setup((stage, _sub, attempt) =>
+      stage === "title" && attempt > 1 ? JSON.stringify({ title: "Salt and Lamplight" }) : undefined,
+    );
+    await runToEnd(id);
+    const before = stageCalls().length;
+    const state = await runToEnd(id, `/api/projects/${id}/generation/stages/title/retry`);
+    expect(state.ready).toBe(true);
+    expect(stageCalls().slice(before)).toEqual(["title"]);
+    expect(state.title).toBe("Salt and Lamplight");
+    const prompt = (requests.at(-1)!.body as { messages: Array<{ content: string }> }).messages[0]!.content;
+    expect(prompt).toContain('rejected these titles; write something clearly different: "The Lamp Beneath the Pier"');
+    // Only what the player may know goes into the title prompt.
+    expect(prompt).not.toContain(fixture.plan.truth.summary);
+    const pkg = pipeline().assembled(id)!.package;
+    expect(pkg.title).toBe("Salt and Lamplight");
+    expect(pkg.lorebooks[0]!.name).toBe("Salt and Lamplight: World");
   });
 
   it("marks everything stale when the approved requirements change", async () => {

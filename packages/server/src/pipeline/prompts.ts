@@ -254,6 +254,32 @@ ${JSON_ONLY}
 {"teaser": "...", "openingMessage": "...", "secretPlot": {"description": "...", "protagonistArc": "...", "characterArc": "...", "sceneDirections": ["..."], "pacing": "..."}}`;
 }
 
+/** The title is player-facing, so it sees only what the player may know: requirements, teaser, public descriptions. */
+export function titlePrompt(r: Requirements, plan: Plan, teaser: string, workingTitle: string, rejected: string[]): string {
+  const known = plan.entities.filter((e) => e.isCard || e.type === "location" || e.type === "organization");
+  return `Stage: title
+You name an adventure for the Marinara Engine roleplay app. The title is the first thing the player sees: on the library card, the Marinara chat and its folders. All output is English.
+
+Write one title:
+- 1 to 6 words, evocative and memorable, like the title of a published ${[r.genre, ...r.subgenres].filter(Boolean).join(" / ") || "genre"} story.
+- Match the tone (${r.tone.join(", ") || "fitting the genre"}) and the prose voice (${r.narration.style || "fitting the genre"}${r.narration.inspirations.length ? `; in the manner of ${r.narration.inspirations.join(", ")}` : ""}).
+- Name the story, do not describe its genre: "Slice of Life Yuri Romance" or "A Noir Mystery in 1940s New York" are wrong.
+- Spoiler-free: use only what the teaser and the public descriptions below reveal. No culprits, twists, hidden motives or secret identities.
+- No quotation marks and no trailing punctuation.
+- The player's working label was "${workingTitle}"; do not reuse it word for word.${rejected.length ? `\n- The player rejected these titles; write something clearly different: ${rejected.map((t) => `"${t}"`).join(", ")}.` : ""}
+
+${brief(r)}
+
+TEASER
+${teaser}
+
+PUBLIC CAST AND PLACES
+${known.map((e) => `- ${e.name} (${e.type}): ${e.publicDescription}`).join("\n")}
+
+${JSON_ONLY}
+{"title": "..."}`;
+}
+
 /** Built by code, not the model: a short constant reminder of the voice for every reply. */
 export function narrativeVoiceEntry(r: Requirements): string | null {
   if (!hasProseStyle(r)) return null;
