@@ -1,5 +1,13 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import type { HealthResponse, Settings, UpdateSettingsInput } from "@adv/shared";
+import {
+  MARINARA_PASSWORD_SECRET,
+  MARINARA_USER_SECRET,
+  type HealthResponse,
+  type MarinaraStatus,
+  type SecretInfo,
+  type Settings,
+  type UpdateSettingsInput,
+} from "@adv/shared";
 import { api } from "../api.ts";
 import { useEffect, useState } from "react";
 
@@ -71,6 +79,8 @@ export function SettingsPage() {
       </label>
       {update.isError && <p className="error">Could not save: {update.error.message}</p>}
 
+      <MarinaraLogin />
+
       <h2>Storage</h2>
       <dl className="facts">
         <dt>Data folder</dt>
@@ -79,5 +89,80 @@ export function SettingsPage() {
         <dd>{health.data?.secretStore === "os-keyring" ? "Operating system credential store" : (health.data?.secretStore ?? "…")}</dd>
       </dl>
     </section>
+  );
+}
+
+/** Marinara's HTTP Basic login (BASIC_AUTH_USER / BASIC_AUTH_PASS). Write-only: stored in the OS credential store. */
+function MarinaraLogin() {
+  const queryClient = useQueryClient();
+  const secrets = useQuery({ queryKey: ["secrets"], queryFn: () => api.get<SecretInfo[]>("/secrets") });
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
+  const saved = (secrets.data ?? []).some((s) => s.name === MARINARA_USER_SECRET) && (secrets.data ?? []).some((s) => s.name === MARINARA_PASSWORD_SECRET);
+
+  const save = useMutation({
+    mutationFn: async () => {
+      await api.put(`/secrets/${MARINARA_USER_SECRET}`, { value: username.trim() });
+      await api.put(`/secrets/${MARINARA_PASSWORD_SECRET}`, { value: password });
+    },
+    onSuccess: () => {
+      setUsername("");
+      setPassword("");
+      void queryClient.invalidateQueries({ queryKey: ["secrets"] });
+      void queryClient.removeQueries({ queryKey: ["marinara-status"] });
+    },
+  });
+  const remove = useMutation({
+    mutationFn: async () => {
+      await api.delete(`/secrets/${MARINARA_USER_SECRET}`).catch(() => undefined);
+      await api.delete(`/secrets/${MARINARA_PASSWORD_SECRET}`).catch(() => undefined);
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["secrets"] });
+      void queryClient.removeQueries({ queryKey: ["marinara-status"] });
+    },
+  });
+  const check = useMutation({ mutationFn: () => api.get<MarinaraStatus>("/marinara/status") });
+  const st = check.data;
+
+  return (
+    <div className="field">
+      <span>Marinara login</span>
+      <small className="muted">
+        Only if your Marinara asks for a username and password (BASIC_AUTH_USER / BASIC_AUTH_PASS). Stored in the operating system
+        credential store, never shown again. {saved ? "A login is saved." : "No login saved."}
+      </small>
+      <div className="row">
+        <input placeholder="Username" autoComplete="off" value={username} onChange={(e) => setUsername(e.target.value)} />
+        <input placeholder="Password" type="password" autoComplete="new-password" value={password} onChange={(e) => setPassword(e.target.value)} />
+        <button disabled={!username.trim() || !password || save.isPending} onClick={() => save.mutate()}>
+          Save login
+        </button>
+        {saved && (
+          <button className="secondary" disabled={remove.isPending} onClick={() => remove.mutate()}>
+            Forget
+          </button>
+        )}
+      </div>
+      <div className="row">
+        <button className="secondary" disabled={check.isPending} onClick={() => check.mutate()}>
+          {check.isPending ? "Checking…" : "Check Marinara connection"}
+        </button>
+      </div>
+      {save.isError && <p className="error">{save.error.message}</p>}
+      {check.isError && <p className="error">{check.error.message}</p>}
+      {st && <MarinaraStatusLine status={st} />}
+    </div>
+  );
+}
+
+export function MarinaraStatusLine({ status: st }: { status: MarinaraStatus }) {
+  if (!st.reachable || !st.authenticated) return <p className="error small">{st.error ?? "Marinara could not be reached."}</p>;
+  return (
+    <p className="small">
+      <span className="ok">Connected</span> to Marinara {st.version ?? ""}. Narrative Director:{" "}
+      {st.directorInstalled ? "installed" : "not installed (Secret Plot cannot be seeded)"}. Embedding connections:{" "}
+      {st.embeddingConnections.length || "none"}.
+    </p>
   );
 }

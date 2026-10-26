@@ -1,6 +1,6 @@
 # Kryteria akceptacji (sekcja 19 specyfikacji)
 
-Stan na 26 października 2026 r., po M7. Sprawdzone na neutralnej przygodzie testowej („Probe Harbor” i „Probe Case”). Obie mają same znaczniki zamiast fabuły.
+Stan na 26 października 2026 r., po M8 (Push to Marinara na lokalnej instancji). Sprawdzone na neutralnej przygodzie testowej („Probe Harbor” i „Probe Case”). Obie mają same znaczniki zamiast fabuły.
 
 Uzupełnieniem są dwa prawdziwe przebiegi przygody „Woman in Red” przez ChatGPT/Codex. Z nich podaję tylko liczby.
 
@@ -22,7 +22,7 @@ Legenda:
 | 9 | Ponowienie awatara lub etapu nie resetuje przygody | ✅ 🧪 | `pipeline.test.ts` „regenerates one card and only what depends on it”, „resumes after a failure…”. `portraits.test.ts` „re-renders only the portraits…”. Portrety „Woman in Red” powstały bez ponawiania innych etapów. |
 | 10 | Można wyeksportować i zacząć grę bez czytania zaplecza fabuły | ✅ 🧪 | `acceptance.test.ts`: START-HERE zawiera tylko tytuł, zajawkę i nazwy, a powitanie ma tylko karta otwierająca. Ścieżki w interfejsie sprawdziłem na lokalnej Marinarze 2.5.1 (szczegóły niżej). `requirements.md` i `qa-report.md` są bezpieczne do czytania. |
 | 11 | Testy zużywające limity są jawne; brak cichego płatnego fallbacku | ✅ | Każde zapytanie do modelu wymaga `confirmUsage: true`, sprawdzają to `connections.test.ts`, `pipeline.test.ts` i `acceptance.test.ts`. Tekst i obrazy idą tylko przez przypisane połączenie, bez fallbacku (`generation/text.ts`, `generation/images.ts`). |
-| 12 | Eksport nie zawiera kluczy ani tokenów; integracja nie uszkadza danych Marinary | ✅ ⏳ | Nowe w M7: przed każdym eksportem pliki są skanowane pod kątem zapisanych kluczy i tokenów (`sk-…`, JWT, `Bearer …`). Trafienie blokuje eksport i nie ujawnia, co znaleziono (`acceptance.test.ts`). Klucze nie trafiają do przeglądarki ani logów (`connections.test.ts`). Część o danych Marinary: eksport plikowy niczego w Marinarze nie zmienia. Push to Marinara (M8) ma tworzyć wyłącznie nowe zasoby. |
+| 12 | Eksport nie zawiera kluczy ani tokenów; integracja nie uszkadza danych Marinary | ✅ | Nowe w M7: przed każdym eksportem pliki są skanowane pod kątem zapisanych kluczy i tokenów (`sk-…`, JWT, `Bearer …`). Trafienie blokuje eksport i nie ujawnia, co znaleziono (`acceptance.test.ts`). Klucze nie trafiają do przeglądarki ani logów (`connections.test.ts`). Część o danych Marinary: eksport plikowy niczego w Marinarze nie zmienia. Push to Marinara tylko tworzy nowe zasoby, a przy błędzie usuwa wyłącznie to, co sam utworzył (`push.test.ts`, test integracyjny `marinara-push.test.ts`). Hasło Marinary nie trafia do komunikatów błędów. |
 
 ## Próba instrukcji START-HERE na lokalnej Marinarze
 
@@ -36,8 +36,27 @@ Paczka „Probe Harbor”, Marinara 2.5.1 (staging), katalog `vendor/marinara-te
 - **Director:** **Chat Settings → Agents → Enable Agents → Add Agent**. Jeśli brak pakietu, pobiera się go w panelu **Agents** („Download Agents”).
 - **Czego nie przeszedłem w interfejsie:** samego kliknięcia przez kreator do końca. Okno podglądu w aplikacji było za wąskie i kreator się zamykał. Zachowanie powitań sprawdziłem w kodzie kreatora i przez API.
 
-## Co zostaje na M8
+## Push to Marinara (M8)
 
-- Secret Plot przygotowany przez generator (eksport plikowy go nie przenosi: `manifest.secretPlot = "not-included"`).
-- Budowa wektorów i ich weryfikacja w grze.
-- Druga połowa kryterium 12 w praktyce: tworzenie tylko nowych zasobów, najpierw na lokalnej instancji, potem na VPS.
+- **Test integracyjny** `test/integration/marinara-push.test.ts` (lokalna Marinara 2.5.1 z Directorem): neutralna przygoda przechodzi przez trasę aplikacji. Potem odczytuję prosto z Marinary:
+  - czat roleplay ma przypięte wszystkie lorebooki, włączonego Directora i Secret Plot;
+  - w czacie jest dokładnie jedna wiadomość: scena otwierająca;
+  - pamięć Directora zawiera zasiany łuk i znacznik `secretPlotLastAssistantMessageId` wskazujący tę wiadomość;
+  - historia pushy w aplikacji nie zawiera tekstu fabuły.
+
+  Po teście wszystko jest usuwane.
+- **Testy jednostkowe** `test/push.test.ts`:
+  - odmowa bez Directora albo push bez Secret Plot na wyraźne życzenie;
+  - wycofanie zmian w odwrotnej kolejności po błędzie;
+  - wektoryzacja: błąd nie usuwa czatu;
+  - nagłówek Basic Auth, hasło nieobecne w błędach.
+- **Prawdziwa przygoda:** „Woman in Red” wysłana z interfejsu na lokalną Marinarę testową:
+  - wszystkie 8 kroków zaliczone (3 karty, persona, 3 lorebooki z 41 wpisami, czat, scena otwierająca, Secret Plot z 6 wskazówkami scen, odczyt kontrolny);
+  - 4 portrety zapisane jako WebP;
+  - przygoda została w lokalnej instancji (`vendor/marinara-test-data`).
+- **Zachowanie Directora przy pierwszej odpowiedzi:** że ze znacznikiem nie przepisuje planu, potwierdziła weryfikacja techniczna (docs/01, sekcja 3). W M8 nie generowałem odpowiedzi w Marinarze.
+
+## Co zostaje
+
+- **Próba na VPS:** wymaga twojej zgody i danych logowania Marinary, bo API zwraca 401 bez logowania.
+- **Wektory na prawdziwym modelu embeddingów:** ścieżka jest przetestowana na atrapie, a „Woman in Red” nie ma lorebooków z wyszukiwaniem semantycznym.

@@ -139,4 +139,14 @@ export const migrations: string[] = [
   -- Portrait settings (style, notes, on/off) as JSON; kept apart from the requirements.
   ALTER TABLE project ADD COLUMN portraits TEXT NOT NULL DEFAULT '{}';
   `,
+  `
+  -- Push to Marinara history: ids, counts and statuses (JSON), never story text.
+  CREATE TABLE marinara_push (
+    id          TEXT PRIMARY KEY,
+    project_id  TEXT NOT NULL REFERENCES project(id) ON DELETE CASCADE,
+    pushed_at   TEXT NOT NULL,
+    record      TEXT NOT NULL
+  );
+  CREATE INDEX marinara_push_project ON marinara_push(project_id, pushed_at);
+  `,
 ];

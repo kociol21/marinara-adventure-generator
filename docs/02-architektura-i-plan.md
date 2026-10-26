@@ -134,6 +134,13 @@ Decyzja z 25 października 2026 r.: integracja wchodzi do wersji 1 jako opcjonal
 
 Uwierzytelnienie: VPS wymaga loginu przez Tailscale Serve (401 bez niego). Aplikacja potrzebuje danych logowania Marinary w magazynie systemowym. Testy integracyjne idą najpierw na lokalną instancję.
 
+**Implementacja (M8):**
+- Pliki z paczki eksportu trafiają przez natywny import (`POST /api/import/marinara`), czyli tę samą drogę co ręczny import. Pozwala to sprawdzić wynik tym samym testem różnicowym.
+- Login to HTTP Basic (`BASIC_AUTH_USER` / `BASIC_AUTH_PASS` Marinary), zapisany jako sekrety `marinara:username` i `marinara:password`.
+- Instalację Directora sprawdza `GET /api/capability-packages/installed`.
+- Po zasiewie aplikacja odczytuje metadane czatu i pamięć Directora i porównuje je z tym, co wysłała.
+- Błąd na dowolnym kroku przed wektorami usuwa wszystko, co ten push utworzył. Błąd wektoryzacji zostawia grywalny czat.
+
 Powód włączenia do wersji 1: bez API Secret Plot da się zasiać tylko ręcznie, a to wymaga od ciebie przeczytania sekretów. Push nigdy nie nadpisuje istniejących zasobów. Przed wysłaniem pokazuje bezspoilerowe podsumowanie tego, co zostanie utworzone, i czeka na potwierdzenie.
 
 ## 7. Plan realizacji wersji 1

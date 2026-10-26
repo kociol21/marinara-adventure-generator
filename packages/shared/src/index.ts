@@ -3,6 +3,7 @@ export * from "./api.ts";
 export * from "./audit.ts";
 export * from "./connections.ts";
 export * from "./export.ts";
+export * from "./marinara.ts";
 export * from "./portraits.ts";
 export * from "./project.ts";
 export * from "./requirements.ts";

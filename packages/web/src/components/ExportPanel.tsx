@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import type { ExportSummary } from "@adv/shared";
 import { api } from "../api.ts";
+import { PushPanel } from "./PushPanel.tsx";
 
 const CHECK_LABEL = { match: "matches its description", mismatch: "may not match its description", unchecked: "not checked" } as const;
 
@@ -85,6 +86,7 @@ export function ExportPanel({ projectId, stamp }: { projectId: string; stamp: st
           Download for Marinara (.zip)
         </a>
       </div>
+      <PushPanel projectId={projectId} vectorBooks={vectorBooks.length} />
     </div>
   );
 }
