@@ -40,6 +40,8 @@ export const marinaraRoutes: FastifyPluginAsync<Deps> = async (app, deps) => {
       version: null,
       directorInstalled: null,
       embeddingConnections: [],
+      chatConnections: [],
+      presets: [],
       error: c ? null : "Set the Marinara URL in Settings.",
     };
     if (!c) return status;
@@ -59,6 +61,8 @@ export const marinaraRoutes: FastifyPluginAsync<Deps> = async (app, deps) => {
       status.authenticated = true;
       status.directorInstalled = installed.includes("director");
       status.embeddingConnections = await c.client.embeddingConnections();
+      status.chatConnections = await c.client.chatConnections();
+      status.presets = await c.client.presets();
     } catch (error) {
       status.error = error instanceof Error ? error.message : "Marinara refused the request.";
     }
@@ -77,12 +81,23 @@ export const marinaraRoutes: FastifyPluginAsync<Deps> = async (app, deps) => {
     busy.add(req.params.id);
     try {
       const secretValues = deps.secrets.list().flatMap((s) => deps.secrets.reveal(s.name) ?? []);
+      // Names for the record; an id Marinara does not know is refused before anything is created.
+      const connection = body.connectionId ? (await c.client.chatConnections()).find((x) => x.id === body.connectionId) : null;
+      const preset = body.promptPresetId ? (await c.client.presets()).find((x) => x.id === body.promptPresetId) : null;
+      if (body.connectionId && !connection) return reply.status(409).send({ error: "That Marinara connection no longer exists. Check again and pick another." });
+      if (body.promptPresetId && !preset) return reply.status(409).send({ error: "That Marinara preset no longer exists. Check again and pick another." });
       const record = await pushToMarinara(
         c.client,
         c.baseUrl,
         assembled.package,
         { ...deps.pipeline.exportContext(req.params.id), secretValues },
-        { withoutSecretPlot: body.withoutSecretPlot, vectorConnectionId: body.vectorConnectionId },
+        {
+          withoutSecretPlot: body.withoutSecretPlot,
+          vectorConnectionId: body.vectorConnectionId,
+          connectionId: body.connectionId,
+          promptPresetId: body.promptPresetId,
+          chatSetupLabel: [connection && `${connection.name} (${connection.model})`, preset?.name].filter(Boolean).join(", "),
+        },
       );
       deps.pushes.add(req.params.id, record);
       return record;

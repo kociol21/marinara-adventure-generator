@@ -17,6 +17,9 @@ export function PushPanel({ projectId, vectorBooks }: { projectId: string; vecto
   });
   const history = useQuery({ queryKey: ["pushes", projectId], queryFn: () => api.get<PushRecord[]>(`/projects/${projectId}/marinara/pushes`) });
   const [vectorConnectionId, setVectorConnectionId] = useState("");
+  // Null until the user picks: then Marinara's own defaults are preselected.
+  const [connectionPick, setConnectionPick] = useState<string | null>(null);
+  const [presetPick, setPresetPick] = useState<string | null>(null);
 
   const push = useMutation({
     mutationFn: (body: PushRequest) => api.post<PushRecord>(`/projects/${projectId}/marinara/push`, body),
@@ -27,6 +30,9 @@ export function PushPanel({ projectId, vectorBooks }: { projectId: string; vecto
   const last = push.data ?? history.data?.[0] ?? null;
   const earlier = (history.data ?? []).filter((r) => r.status === "done").length;
   const ready = !!st?.reachable && !!st.authenticated;
+  const known = (id: string | null, list: Array<{ id: string }>) => (id !== null && (id === "" || list.some((x) => x.id === id)) ? id : null);
+  const connectionId = known(connectionPick, st?.chatConnections ?? []) ?? st?.chatConnections.find((c) => c.isDefault)?.id ?? "";
+  const presetId = known(presetPick, st?.presets ?? []) ?? st?.presets.find((p) => p.isDefault)?.id ?? "";
 
   const run = () => {
     const withoutSecretPlot = st?.directorInstalled !== true;
@@ -37,10 +43,17 @@ export function PushPanel({ projectId, vectorBooks }: { projectId: string; vecto
       withoutSecretPlot
         ? "The Narrative Director is not installed, so the chat will have no seeded Secret Plot."
         : "The Narrative Director's Secret Plot is seeded for the new chat.",
+      ...(connectionId ? [] : ["No connection is set for the chat; pick one in Marinara's chat settings before the first message."]),
       ...(vectorConnectionId ? ["Vectorizing uses that Marinara connection's embedding model (quota or credits)."] : []),
       ...(earlier ? [`This adventure was pushed ${earlier} time(s) before; this creates another copy.`] : []),
     ];
-    if (window.confirm(lines.join("\n"))) push.mutate({ confirm: true, withoutSecretPlot, vectorConnectionId: vectorConnectionId || null });
+    if (window.confirm(lines.join("\n"))) push.mutate({
+        confirm: true,
+        withoutSecretPlot,
+        vectorConnectionId: vectorConnectionId || null,
+        connectionId: connectionId || null,
+        promptPresetId: presetId || null,
+      });
   };
 
   return (
@@ -57,6 +70,36 @@ export function PushPanel({ projectId, vectorBooks }: { projectId: string; vecto
         </p>
       )}
       {st?.baseUrl && <MarinaraStatusLine status={st} />}
+
+      {ready && (
+        <>
+          <label className="field">
+            <span>Chat connection</span>
+            <select value={connectionId} onChange={(e) => setConnectionPick(e.target.value)}>
+              <option value="">None — choose in Marinara later</option>
+              {st.chatConnections.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name}
+                  {c.model ? ` (${c.model})` : ""}
+                  {c.isDefault ? " — default" : ""}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="field">
+            <span>Prompt preset</span>
+            <select value={presetId} onChange={(e) => setPresetPick(e.target.value)}>
+              <option value="">None</option>
+              {st.presets.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.name}
+                  {p.isDefault ? " — default" : ""}
+                </option>
+              ))}
+            </select>
+          </label>
+        </>
+      )}
 
       {ready && vectorBooks > 0 && (
         <label className="field">

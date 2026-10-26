@@ -65,6 +65,9 @@ export function createMarinaraClient(options: MarinaraClientOptions) {
     }
   }
 
+  // Marinara stores some booleans as the strings "true" / "false" (SQLite text columns).
+  const flag = (value: unknown): boolean => value === true || value === "true" || value === 1;
+
   const idOf = (value: unknown, what: string): string => {
     if (isRecord(value) && typeof value.id === "string") return value.id;
     throw new MarinaraError(`Marinara did not return an id for the new ${what}.`);
@@ -97,6 +100,24 @@ export function createMarinaraClient(options: MarinaraClientOptions) {
       );
     },
 
+    /** Connections that can write chat replies; image, video, audio and decision connections are left out. */
+    async chatConnections(): Promise<Array<{ id: string; name: string; model: string; isDefault: boolean }>> {
+      const list = await call<unknown[]>("GET", "/api/connections", undefined, 10_000);
+      const notChat = new Set(["image_generation", "video_generation", "audio_generation", "decision", "tts"]);
+      return (Array.isArray(list) ? list : []).flatMap((c) =>
+        isRecord(c) && typeof c.id === "string" && !notChat.has(String(c.provider))
+          ? [{ id: c.id, name: typeof c.name === "string" ? c.name : c.id, model: typeof c.model === "string" ? c.model : "", isDefault: flag(c.isDefault) }]
+          : [],
+      );
+    },
+
+    async presets(): Promise<Array<{ id: string; name: string; isDefault: boolean }>> {
+      const list = await call<unknown[]>("GET", "/api/prompts", undefined, 10_000);
+      return (Array.isArray(list) ? list : []).flatMap((p) =>
+        isRecord(p) && typeof p.id === "string" ? [{ id: p.id, name: typeof p.name === "string" ? p.name : p.id, isDefault: flag(p.isDefault) }] : [],
+      );
+    },
+
     /** Native import: the same route and files as a manual import, so the result matches the export. */
     async importEnvelope(envelope: NativeEnvelope): Promise<string> {
       const res = await call<Record<string, unknown>>("POST", "/api/import/marinara", envelope, 120_000);
@@ -104,7 +125,13 @@ export function createMarinaraClient(options: MarinaraClientOptions) {
       return idOf(res, envelope.type.replace("marinara_", ""));
     },
 
-    async createChat(input: { name: string; characterIds: string[]; personaId: string | null }): Promise<string> {
+    async createChat(input: {
+      name: string;
+      characterIds: string[];
+      personaId: string | null;
+      connectionId: string | null;
+      promptPresetId: string | null;
+    }): Promise<string> {
       return idOf(await call("POST", "/api/chats", { ...input, mode: "roleplay" }), "chat");
     },
 

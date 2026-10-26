@@ -15,6 +15,11 @@ import { toNative } from "./native.ts";
 export interface PushOptions {
   withoutSecretPlot: boolean;
   vectorConnectionId: string | null;
+  /** For the new chat; null leaves Marinara's defaults (its default connection, no preset). */
+  connectionId: string | null;
+  promptPresetId: string | null;
+  /** Spoiler-free names of the chosen connection and preset, for the record. */
+  chatSetupLabel?: string;
 }
 
 export class PushRefusedError extends Error {}
@@ -104,9 +109,15 @@ export async function pushToMarinara(
     // The opening card first, like the roleplay setup in START-HERE.
     const ordered = [opening, ...pkg.characters.filter((c) => c !== opening)].map((c) => characterIds.get(c.key)!);
     const chatId = await step("chat", "Create the roleplay chat", async () => {
-      const id = await client.createChat({ name: pkg.title, characterIds: ordered, personaId });
+      const id = await client.createChat({
+        name: pkg.title,
+        characterIds: ordered,
+        personaId,
+        connectionId: options.connectionId,
+        promptPresetId: options.promptPresetId,
+      });
       created.push({ kind: "chat", id });
-      return { value: id, detail: pkg.title };
+      return { value: id, detail: [pkg.title, options.chatSetupLabel].filter(Boolean).join(" · ") };
     });
     record.chatId = chatId;
 

@@ -16,6 +16,10 @@ export interface MarinaraStatus {
   directorInstalled: boolean | null;
   /** Marinara connections that can build lorebook vectors (names only, never keys). */
   embeddingConnections: Array<{ id: string; name: string; embeddingModel: string }>;
+  /** Marinara connections that can drive a chat (text providers only; names and models, never keys). */
+  chatConnections: Array<{ id: string; name: string; model: string; isDefault: boolean }>;
+  /** Marinara prompt presets; the one marked default is what a new chat would get. */
+  presets: Array<{ id: string; name: string; isDefault: boolean }>;
   error: string | null;
 }
 
@@ -26,6 +30,9 @@ export const pushRequestSchema = z.object({
   withoutSecretPlot: z.boolean().default(false),
   /** Marinara connection used to vectorize lorebooks with semantic search on; null skips it. */
   vectorConnectionId: z.string().min(1).nullable().default(null),
+  /** Marinara connection and prompt preset for the new chat; null leaves Marinara's own default. */
+  connectionId: z.string().min(1).nullable().default(null),
+  promptPresetId: z.string().min(1).nullable().default(null),
 });
 export type PushRequest = z.input<typeof pushRequestSchema>;
 

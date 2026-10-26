@@ -34,7 +34,7 @@ function fakeMarinara(options: { director?: boolean; failOn?: string } = {}) {
 
 const client = (fake: ReturnType<typeof fakeMarinara>, credentials = { username: "u", password: "pass-word-123" }) =>
   createMarinaraClient({ baseUrl: BASE, credentials, fetch: fake.fetch });
-const opts = { withoutSecretPlot: false, vectorConnectionId: null };
+const opts = { withoutSecretPlot: false, vectorConnectionId: null, connectionId: null, promptPresetId: null };
 
 describe("Push to Marinara", () => {
   it("imports, creates the chat, seeds the Secret Plot with its start marker and verifies it", async () => {
@@ -60,6 +60,32 @@ describe("Push to Marinara", () => {
     expect(fake.requests.every((r) => r.headers.authorization === `Basic ${Buffer.from("u:pass-word-123").toString("base64")}`)).toBe(true);
     // The record is safe to store and show: no story text.
     expect(JSON.stringify(record)).not.toMatch(/SECRET_|ALPHA_FIRST_MESSAGE/);
+  });
+
+  it("creates the chat with the chosen connection and preset", async () => {
+    const fake = fakeMarinara();
+    const record = await pushToMarinara(client(fake), BASE, pkg(), {}, { ...opts, connectionId: "conn-9", promptPresetId: "preset-3", chatSetupLabel: "Main (m1), Preset" });
+    const chat = fake.requests.find((r) => r.method === "POST" && r.url.endsWith("/api/chats"))!;
+    expect(chat.body).toMatchObject({ connectionId: "conn-9", promptPresetId: "preset-3" });
+    expect(record.steps.find((s) => s.id === "chat")!.detail).toContain("Main (m1), Preset");
+  });
+
+  it("lists chat connections and presets without keys", async () => {
+    const fake = fakeFetch({
+      "GET /api/connections": () => ({
+        json: [
+          { id: "c1", name: "Main", provider: "openai", model: "m1", isDefault: true, apiKeyEncrypted: "SECRET_KEY" },
+          { id: "c2", name: "Pics", provider: "image_generation", model: "img", apiKeyEncrypted: "SECRET_KEY" },
+        ],
+      }),
+      "GET /api/prompts": () => ({ json: [{ id: "p1", name: "Preset", isDefault: "true", sections: "SECRET_PROMPT" }, { id: "p2", name: "Other", isDefault: "false" }] }),
+    });
+    const c = createMarinaraClient({ baseUrl: BASE, credentials: null, fetch: fake.fetch });
+    expect(await c.chatConnections()).toEqual([{ id: "c1", name: "Main", model: "m1", isDefault: true }]);
+    expect(await c.presets()).toEqual([
+      { id: "p1", name: "Preset", isDefault: true },
+      { id: "p2", name: "Other", isDefault: false },
+    ]);
   });
 
   it("refuses without the Narrative Director unless told to push without the Secret Plot", async () => {

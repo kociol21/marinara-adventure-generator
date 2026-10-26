@@ -76,7 +76,16 @@ describe.skipIf(!base)("Push to Marinara (local instance)", () => {
     const status = (await app.inject({ method: "GET", url: "/api/marinara/status", headers: { host } })).json();
     expect(status).toMatchObject({ reachable: true, authenticated: true, directorInstalled: true });
 
-    const res = await app.inject({ method: "POST", url: `/api/projects/${id}/marinara/push`, headers: write, payload: { confirm: true } });
+    // Lists come from Marinara with names only; pick its default preset and a chat connection if it has one.
+    expect(JSON.stringify(status)).not.toMatch(/apiKey/i);
+    const preset = status.presets.find((p: { isDefault: boolean }) => p.isDefault) ?? status.presets[0] ?? null;
+    const connection = status.chatConnections[0] ?? null;
+    const res = await app.inject({
+      method: "POST",
+      url: `/api/projects/${id}/marinara/push`,
+      headers: write,
+      payload: { confirm: true, connectionId: connection?.id ?? null, promptPresetId: preset?.id ?? null },
+    });
     expect(res.statusCode, res.body).toBe(200);
     record = res.json() as PushRecord;
     expect(record.status, JSON.stringify(record.steps)).toBe("done");
@@ -86,6 +95,8 @@ describe.skipIf(!base)("Push to Marinara (local instance)", () => {
     // Read back from Marinara directly.
     const chat = await marinara("GET", `/api/chats/${record.chatId}`);
     expect(chat.mode).toBe("roleplay");
+    expect(chat.promptPresetId ?? null).toBe(preset?.id ?? null);
+    expect(chat.connectionId ?? null).toBe(connection?.id ?? null);
     expect(chat.metadata).toMatchObject({ enableAgents: true, activeAgentIds: ["director"], narrativeDirectorSecretPlotEnabled: true });
     expect(chat.metadata.activeLorebookIds).toHaveLength(Object.keys((fixture as any).lorebooks).length);
     const messages = await marinara<any[]>("GET", `/api/chats/${record.chatId}/messages`);

@@ -62,7 +62,8 @@ Paczka „Probe Harbor”, Marinara 2.5.1 (staging), katalog `vendor/marinara-te
   - Główny adres hosta prowadzi do innej aplikacji („Hermes Agent”). To jej API zwracało wcześniej 401.
   - Dostęp przez Tailscale jest zaufany, więc login nie był potrzebny.
 - **Wynik:** wersja 2.5.1, Director zainstalowany. Push „Woman in Red”: wszystkie 8 kroków zaliczone, odczyt kontrolny zgodny, 3 portrety kart jako WebP.
-- **Zostaje do zrobienia ręcznie:** czat nie ma przypisanego połączenia z modelem ani presetu, bo na VPS nie ma połączenia domyślnego. Wybiera się je w ustawieniach czatu przed pierwszą wiadomością.
+- **Zostaje do zrobienia ręcznie:** ten czat nie ma przypisanego połączenia z modelem ani presetu, bo na VPS nie ma połączenia domyślnego. Wybiera się je w ustawieniach czatu przed pierwszą wiadomością.
+- **Poprawka po tym pushu:** panel Push ma teraz listy **Chat connection** i **Prompt preset** pobrane z Marinary. Z Marinary wychodzą tylko id, nazwa, model i flaga domyślności, bez kluczy (`push.test.ts`, test integracyjny). Domyślny preset Marinary jest zaznaczony z góry. Uwaga: Marinara zapisuje `isDefault` jako tekst `"true"`.
 
 ## Co zostaje
 
