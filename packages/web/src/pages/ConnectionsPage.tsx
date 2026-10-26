@@ -3,17 +3,24 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   CONNECTION_KINDS,
   connectionKindSchema,
-  type Capability,
+  TASK_CAPABILITY,
   type CatalogModel,
   type Connection,
   type ConnectionKind,
+  type Task,
   type TaskAssignment,
 } from "@adv/shared";
 import { api } from "../api.ts";
 import { ConnectionCard, billingLabel } from "../components/ConnectionCard.tsx";
 
-const TASKS: Array<{ task: Capability; label: string; hint: string }> = [
-  { task: "text", label: "Text generation", hint: "Interview, planning, cards, lorebooks and audits." },
+const TASKS: Array<{ task: Task; label: string; hint: string; empty?: string }> = [
+  { task: "text", label: "Text generation", hint: "Interview, facts, cards, lorebooks and audits." },
+  {
+    task: "story",
+    label: "Story model (optional)",
+    hint: "A stronger model for the plan, the clues and the opening with its Secret Plot. Everything else stays on the text model.",
+    empty: "Same as text generation",
+  },
   { task: "image", label: "Avatars", hint: "Character portraits." },
   { task: "embedding", label: "Embeddings (audit)", hint: "Finds facts repeated in other words across the package." },
   {
@@ -53,7 +60,7 @@ function Assignments({ connections }: { connections: Connection[] }) {
   });
 
   const save = useMutation({
-    mutationFn: ({ task, value }: { task: Capability; value: string }) => {
+    mutationFn: ({ task, value }: { task: Task; value: string }) => {
       if (!value) return api.delete(`/assignments/${task}`);
       const [connectionId, ...rest] = value.split("|");
       return api.put(`/assignments/${task}`, { connectionId, modelId: rest.join("|") });
@@ -66,9 +73,9 @@ function Assignments({ connections }: { connections: Connection[] }) {
   return (
     <div className="panel">
       <h2>Task assignments</h2>
-      {TASKS.map(({ task, label, hint }) => {
+      {TASKS.map(({ task, label, hint, empty }) => {
         const current = assignments.data?.find((a) => a.task === task);
-        const options = (models.data ?? []).filter((m) => m.capability === task);
+        const options = (models.data ?? []).filter((m) => m.capability === TASK_CAPABILITY[task]);
         return (
           <label key={task} className="field">
             <span>
@@ -78,7 +85,7 @@ function Assignments({ connections }: { connections: Connection[] }) {
               value={current ? `${current.connectionId}|${current.modelId}` : ""}
               onChange={(e) => save.mutate({ task, value: e.target.value })}
             >
-              <option value="">Not assigned</option>
+              <option value="">{empty ?? "Not assigned"}</option>
               {options.map((m) => (
                 <option key={`${m.connectionId}|${m.modelId}`} value={`${m.connectionId}|${m.modelId}`}>
                   {nameOf(m.connectionId)} · {m.name} ({billingLabel(m)})

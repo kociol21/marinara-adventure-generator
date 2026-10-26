@@ -1,5 +1,5 @@
 import type { z } from "zod";
-import { CONNECTION_KINDS } from "@adv/shared";
+import { CONNECTION_KINDS, STORY_PURPOSES } from "@adv/shared";
 import type { Db } from "../db/database.ts";
 import type { ConnectionsRepo } from "../repos/connections.ts";
 import { createAdapter, errorMessage, estimateTokens, type AdapterDeps, type ChatTurn, type Usage } from "../connections/adapters.ts";
@@ -37,25 +37,31 @@ export function extractJson(text: string): unknown {
 }
 
 /**
- * Text generation through the connection and model assigned to the "text" task. There is no
- * fallback: if the assignment is missing or the provider fails, the caller gets an error
- * (spec §13: never switch provider, model or billing silently).
+ * Text generation through the connection and model assigned to the "text" task, or to the
+ * "story" task for STORY_PURPOSES when the user assigned one. That choice is fixed by the
+ * assignments, never by failures: if the model is missing or the provider fails, the caller gets
+ * an error (spec §13: never switch provider, model or billing silently).
  */
 export function createTextGenerator(db: Db, connections: ConnectionsRepo, deps: AdapterDeps) {
   const log = createCallLog(db, connections);
 
   async function generate(req: GenerateRequest): Promise<string> {
-    const assignment = connections.listAssignments().find((a) => a.task === "text");
+    const assignments = connections.listAssignments();
+    const story = STORY_PURPOSES.has(req.purpose) ? assignments.find((a) => a.task === "story") : undefined;
+    const assignment = story ?? assignments.find((a) => a.task === "text");
     const connection = assignment ? connections.get(assignment.connectionId) : null;
     if (!assignment || !connection) {
-      throw new GenerationError("No text model is assigned. Choose one under Connections → Task assignments.", "not-assigned");
+      throw new GenerationError(
+        story ? "The story model's connection is gone. Choose another under Connections → Task assignments." : "No text model is assigned. Choose one under Connections → Task assignments.",
+        "not-assigned",
+      );
     }
     if (CONNECTION_KINDS[connection.kind].catalog.text === "unsupported") {
       throw new GenerationError(`${connection.name} cannot generate text.`, "not-assigned");
     }
     const adapter = createAdapter(connection, connections.apiKey(connection.id), deps);
     const start = Date.now();
-    const call = { projectId: req.projectId ?? null, task: "text" as const, purpose: req.purpose, connectionId: connection.id, modelId: assignment.modelId };
+    const call = { projectId: req.projectId ?? null, task: assignment.task, purpose: req.purpose, connectionId: connection.id, modelId: assignment.modelId };
     let usage: Usage | null = null;
     try {
       const text = await adapter.complete({

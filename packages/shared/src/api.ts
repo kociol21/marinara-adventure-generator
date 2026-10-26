@@ -66,6 +66,8 @@ export interface UsageEstimate {
   outputTokens: number | null;
   /** Text model assigned now and how it is billed. */
   model: string | null;
+  /** Story model for plan, clues and opening, when one is assigned. */
+  storyModel: string | null;
   billing: "subscription" | "paid" | "free" | "unknown";
   /** USD at the current text model's list price, when it has one. */
   costUsd: number | null;

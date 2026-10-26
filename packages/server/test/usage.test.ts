@@ -130,3 +130,60 @@ describe("usage forecast", () => {
     expect(self.basedOn).toBe(0);
   });
 });
+
+describe("story model", () => {
+  it("sends plan, clues and opening to the story model when one is assigned, and prices the forecast per model", async () => {
+    const fake = fakeFetch({
+      "GET /models": () => ({
+        json: {
+          data: [
+            { id: "cheap", name: "Cheap", ...paid },
+            { id: "strong", name: "Strong", pricing: { prompt: 20, completion: 100, currency: "USD", unit: "per_million_tokens" }, subscription: { included: false } },
+          ],
+        },
+      }),
+      "POST /chat/completions": () => ({ json: { choices: [{ message: { content: "ok" } }], usage: { prompt_tokens: 10, completion_tokens: 5 } } }),
+    });
+    db = openDatabase(":memory:");
+    const store = new MemorySecretStore();
+    app = await buildApp({ db, secretStore: store, dataDir: "x", port: PORT, fetch: fake.fetch });
+    const conn = (await app.inject({ method: "POST", url: "/api/connections", headers: write, payload: { kind: "nano-gpt", name: "N", apiKey: "k" } })).json();
+    await app.inject({ method: "POST", url: `/api/connections/${conn.id}/models/fetch`, headers: write, payload: { capability: "text" } });
+    await app.inject({ method: "PUT", url: "/api/assignments/text", headers: write, payload: { connectionId: conn.id, modelId: "cheap" } });
+    const id = (await app.inject({ method: "POST", url: "/api/projects", headers: write, payload: { title: "Case" } })).json().id as string;
+    const { createTextGenerator } = await import("../src/generation/text.ts");
+    const { createConnectionsRepo } = await import("../src/repos/connections.ts");
+    const { createSecretsRepo } = await import("../src/repos/secrets.ts");
+    const text = createTextGenerator(db, createConnectionsRepo(db, createSecretsRepo(db, store)), { fetch: fake.fetch } as never);
+    const modelOf = async (purpose: string) => {
+      await text.generate({ projectId: id, purpose, system: "s", messages: [{ role: "user", content: "u" }] });
+      return (fake.requests.at(-1)!.body as { model: string }).model;
+    };
+
+    // Without a story model everything goes to the text model.
+    expect(await modelOf("plan")).toBe("cheap");
+    const put = await app.inject({ method: "PUT", url: "/api/assignments/story", headers: write, payload: { connectionId: conn.id, modelId: "strong" } });
+    expect(put.statusCode).toBe(200);
+    expect(await modelOf("plan")).toBe("strong");
+    expect(await modelOf("clues")).toBe("strong");
+    expect(await modelOf("opening")).toBe("strong");
+    expect(await modelOf("facts")).toBe("cheap");
+    expect(await modelOf("lorebook:plot")).toBe("cheap");
+    expect(await modelOf("audit-review")).toBe("cheap");
+    const tasks = db.prepare("SELECT task, purpose FROM llm_call ORDER BY id").all() as Array<{ task: string; purpose: string }>;
+    expect(tasks.filter((t) => t.task === "story").map((t) => t.purpose)).toEqual(["plan", "clues", "opening"]);
+    // Story calls are priced at the strong model's list price.
+    const usage = (await app.inject({ method: "GET", url: `/api/projects/${id}/usage`, headers: { host } })).json();
+    expect(usage.total.costUsd).toBeCloseTo((4 * (10 * 2 + 5 * 10) + 3 * (10 * 20 + 5 * 100)) / 1e6, 12);
+
+    db.prepare("UPDATE project SET status = 'ready' WHERE id = ?").run(id);
+    const e = (await app.inject({ method: "GET", url: "/api/usage/estimate", headers: { host } })).json();
+    expect(e).toMatchObject({ basedOn: 1, model: "cheap", storyModel: "strong", inputTokens: 70, outputTokens: 35 });
+    // The forecast prices by stage at the models assigned now, so the first plan call counts as story too.
+    expect(e.costUsd).toBeCloseTo((30 * 2 + 15 * 10 + 40 * 20 + 20 * 100) / 1e6, 12);
+
+    // Clearing it sends the story stages back to the text model.
+    await app.inject({ method: "DELETE", url: "/api/assignments/story", headers: { host, "x-adv-csrf": "1" } });
+    expect(await modelOf("plan")).toBe("cheap");
+  });
+});

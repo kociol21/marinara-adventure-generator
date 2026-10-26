@@ -1,9 +1,7 @@
-import type { Capability, Task } from "@adv/shared";
+import { TASK_CAPABILITY, type Task } from "@adv/shared";
 import type { Db } from "../db/database.ts";
 import type { ConnectionsRepo } from "../repos/connections.ts";
 import type { Usage } from "../connections/adapters.ts";
-
-const CAPABILITY: Record<Task, Capability> = { text: "text", image: "image", embedding: "embedding", decision: "decision" };
 
 export interface CallRecord {
   projectId: string | null;
@@ -31,7 +29,7 @@ export function createCallLog(db: Db, connections: ConnectionsRepo) {
   `);
 
   return (call: CallRecord): void => {
-    const model = connections.listModels(call.connectionId, CAPABILITY[call.task]).find((m) => m.modelId === call.modelId);
+    const model = connections.listModels(call.connectionId, TASK_CAPABILITY[call.task]).find((m) => m.modelId === call.modelId);
     const billing = model?.billing ?? "unknown";
     const u = call.usage ?? null;
     let cost: number | null = null;

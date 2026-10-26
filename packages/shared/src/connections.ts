@@ -127,9 +127,17 @@ export interface FetchModelsResult {
   models: CatalogModel[];
 }
 
-/** Tasks map one to one onto capabilities; "decision" is the judge of the quality audit. */
-export const taskSchema = z.enum(["text", "image", "embedding", "decision"]);
+/**
+ * "decision" is the judge of the quality audit. "story" is an optional second text model for the
+ * stages that shape the adventure (STORY_PURPOSES); without one they use the "text" model.
+ */
+export const taskSchema = z.enum(["text", "story", "image", "embedding", "decision"]);
 export type Task = z.infer<typeof taskSchema>;
+
+export const TASK_CAPABILITY: Record<Task, Capability> = { text: "text", story: "text", image: "image", embedding: "embedding", decision: "decision" };
+
+/** Generation calls that go to the story model when one is assigned: plan, clues, opening and Secret Plot. */
+export const STORY_PURPOSES: ReadonlySet<string> = new Set(["plan", "clues", "opening"]);
 
 export interface TaskAssignment {
   task: Task;

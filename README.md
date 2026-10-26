@@ -51,7 +51,7 @@ It checks its own work and hands the result to Marinara, either as a single clic
 
 ## Model connections
 
-You can use any of these. Each task (text, image, embedding, judge) gets its own connection and model on the **Connections** page.
+You can use any of these. Each task (text, image, embedding, judge) gets its own connection and model on the **Connections** page. An optional **story model** takes the stages that shape the adventure: the plan, the clues, and the opening with its Secret Plot. Put a stronger model there and keep a cheap one for text; facts, cards, lorebooks and audits stay on the text model. The cost forecast prices each part at its own model.
 
 | Provider | Text | Images | Embeddings | Judge (Jev) |
 | --- | --- | --- | --- | --- |

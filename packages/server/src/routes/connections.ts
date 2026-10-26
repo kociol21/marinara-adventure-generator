@@ -7,6 +7,7 @@ import {
   fetchModelsSchema,
   setApiKeySchema,
   setAssignmentSchema,
+  TASK_CAPABILITY,
   taskSchema,
   testRequestSchema,
   updateConnectionSchema,
@@ -159,12 +160,12 @@ export const assignmentRoutes: FastifyPluginAsync<{ connections: ConnectionsRepo
     const { connectionId, modelId } = setAssignmentSchema.parse(req.body);
     const connection = connections.get(connectionId);
     if (!connection) return notFound(reply);
-    const capability: Capability = task;
+    const capability: Capability = TASK_CAPABILITY[task];
     if (CONNECTION_KINDS[connection.kind].catalog[capability] === "unsupported") {
-      return reply.status(400).send({ error: `${CONNECTION_KINDS[connection.kind].label} cannot handle ${task}.` });
+      return reply.status(400).send({ error: `${CONNECTION_KINDS[connection.kind].label} cannot handle ${capability}.` });
     }
     if (!connections.listModels(connectionId, capability).some((m) => m.modelId === modelId)) {
-      return reply.status(400).send({ error: `Fetch or add the ${task} model on this connection first.` });
+      return reply.status(400).send({ error: `Fetch or add the ${capability} model on this connection first.` });
     }
     return connections.setAssignment(task, connectionId, modelId);
   });

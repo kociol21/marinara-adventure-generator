@@ -1,4 +1,4 @@
-import type { ProjectUsage, UsageEstimate, UsageTotals } from "@adv/shared";
+import { STORY_PURPOSES, type ProjectUsage, type UsageEstimate, type UsageTotals } from "@adv/shared";
 import type { Db } from "../db/database.ts";
 import type { ConnectionsRepo } from "./connections.ts";
 
@@ -76,38 +76,58 @@ export function createUsageRepo(db: Db, connections: ConnectionsRepo) {
 
     /**
      * Averages over finished adventures (requests and images per run, tokens per text request,
-     * from the calls that recorded them), priced at the text model assigned now.
+     * from the calls that recorded them), priced at the models assigned now: story-stage calls at
+     * the story model when one is assigned, everything else at the text model.
      */
     estimate(excludeProjectId = ""): UsageEstimate {
       const rows = (finished.all(excludeProjectId) as unknown as CallRow[]).filter(isGeneration);
       const projects = new Set(rows.map((r) => r.project_id));
       const n = projects.size;
-      const assignment = connections.listAssignments().find((a) => a.task === "text");
-      const model = assignment
-        ? connections.listModels(assignment.connectionId, "text").find((m) => m.modelId === assignment.modelId)
-        : undefined;
-      const billing = model?.billing ?? "unknown";
-      const base = { basedOn: n, model: assignment?.modelId ?? null, billing } as const;
+      const assignments = connections.listAssignments();
+      const modelFor = (task: "text" | "story") => {
+        const a = assignments.find((x) => x.task === task);
+        return a ? { id: a.modelId, info: connections.listModels(a.connectionId, "text").find((m) => m.modelId === a.modelId) } : null;
+      };
+      const textModel = modelFor("text");
+      const storyModel = modelFor("story");
+      const billing = textModel?.info?.billing ?? "unknown";
+      const base = { basedOn: n, model: textModel?.id ?? null, storyModel: storyModel?.id ?? null, billing } as const;
       if (!n) return { ...base, requests: 0, images: 0, inputTokens: null, outputTokens: null, costUsd: null, quotaTokens: null };
 
-      const text = rows.filter((r) => r.task === "text");
-      const measured = text.filter((r) => r.input_tokens != null);
+      const text = rows.filter((r) => r.task === "text" || r.task === "story");
       const requests = Math.round(rows.length / n);
       const images = Math.round(rows.filter((r) => r.task === "image").length / n);
-      const textPerRun = text.length / n;
+      const groups = storyModel
+        ? [
+            { model: storyModel, rows: text.filter((r) => STORY_PURPOSES.has(r.purpose)) },
+            { model: textModel, rows: text.filter((r) => !STORY_PURPOSES.has(r.purpose)) },
+          ]
+        : [{ model: textModel, rows: text }];
+
       let inputTokens: number | null = null;
       let outputTokens: number | null = null;
-      if (measured.length) {
-        inputTokens = Math.round((measured.reduce((s, r) => s + r.input_tokens!, 0) / measured.length) * textPerRun);
-        outputTokens = Math.round((measured.reduce((s, r) => s + (r.output_tokens ?? 0), 0) / measured.length) * textPerRun);
-      }
       let costUsd: number | null = null;
       let quotaTokens: number | null = null;
-      if (inputTokens != null && outputTokens != null) {
-        if (billing === "subscription") quotaTokens = Math.round(inputTokens * (model?.quotaMultiplier ?? 1));
-        else if (billing === "free") costUsd = 0;
-        else if (model?.priceIn != null && model.priceOut != null) costUsd = (inputTokens * model.priceIn + outputTokens * model.priceOut) / 1_000_000;
+      let unpriced = false;
+      for (const g of groups) {
+        const measured = g.rows.filter((r) => r.input_tokens != null);
+        if (!measured.length) {
+          if (g.rows.length) unpriced = true;
+          continue;
+        }
+        const perRun = g.rows.length / n;
+        const inT = Math.round((measured.reduce((s, r) => s + r.input_tokens!, 0) / measured.length) * perRun);
+        const outT = Math.round((measured.reduce((s, r) => s + (r.output_tokens ?? 0), 0) / measured.length) * perRun);
+        inputTokens = (inputTokens ?? 0) + inT;
+        outputTokens = (outputTokens ?? 0) + outT;
+        const m = g.model?.info;
+        if (m?.billing === "subscription") quotaTokens = (quotaTokens ?? 0) + Math.round(inT * (m.quotaMultiplier ?? 1));
+        else if (m?.billing === "free") costUsd ??= 0;
+        else if (m?.priceIn != null && m.priceOut != null) costUsd = (costUsd ?? 0) + (inT * m.priceIn + outT * m.priceOut) / 1_000_000;
+        else unpriced = true;
       }
+      // A partial dollar figure would understate the run, so it is all or nothing.
+      if (unpriced) costUsd = null;
       return { ...base, requests, images, inputTokens, outputTokens, costUsd, quotaTokens };
     },
   };

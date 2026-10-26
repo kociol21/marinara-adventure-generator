@@ -109,8 +109,12 @@ export function estimateText(e: UsageEstimate | undefined): string | null {
   let spend = "";
   if (e.inputTokens != null && e.outputTokens != null) {
     spend = `, roughly ${formatTokens(e.inputTokens)} input and ${formatTokens(e.outputTokens)} output tokens`;
-    if (e.quotaTokens != null) spend += ` (about ${formatTokens(e.quotaTokens)} of subscription quota on ${e.model})`;
-    else if (e.costUsd != null) spend += ` (about ${formatUsd(e.costUsd)} at ${e.model}'s list price)`;
+    const models = e.storyModel && e.storyModel !== e.model ? `${e.model} with ${e.storyModel} for the story stages` : e.model;
+    const parts = [
+      ...(e.quotaTokens != null ? [`${formatTokens(e.quotaTokens)} of subscription quota`] : []),
+      ...(e.costUsd != null ? [`${formatUsd(e.costUsd)} at list price`] : []),
+    ];
+    if (parts.length) spend += ` (about ${parts.join(" plus ")} on ${models})`;
   }
   return `${from}${images}${spend}. Audit fix rounds can make it more.`;
 }
