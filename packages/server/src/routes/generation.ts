@@ -43,7 +43,7 @@ export const generationRoutes: FastifyPluginAsync<{ pipeline: Pipeline }> = asyn
 
   /** Download the Marinara import bundle (zip). */
   app.get<{ Params: { id: string } }>("/:id/export", async (req, reply) => {
-    const assembled = pipeline.assembled(req.params.id);
+    const assembled = await pipeline.exportable(req.params.id);
     if (!assembled) return reply.status(409).send({ error: "Finish generation before exporting." });
     try {
       // The bundle's QA report never carries details, whatever the spoiler setting.

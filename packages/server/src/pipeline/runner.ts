@@ -7,9 +7,11 @@ import type { SettingsRepo } from "../repos/settings.ts";
 import type { StageRow, StagesRepo } from "../repos/stages.ts";
 import { GenerationError, type TextGenerator } from "../generation/text.ts";
 import { PROMPT_VERSION } from "./prompts.ts";
-import { buildStages, FIXABLE_STAGE, PackageInvalidError, type AssembleOutput, type StageContext, type StageDef } from "./stages.ts";
+import { buildStages, FIXABLE_STAGE, type AvatarOutput, PackageInvalidError, type AssembleOutput, type StageContext, type StageDef } from "./stages.ts";
 import type { AuditOutput } from "../audit/units.ts";
 import type { Embedder } from "../generation/embeddings.ts";
+import type { ImageGenerator } from "../generation/images.ts";
+import { portraitDataUrl } from "./portraits.ts";
 import type { Opening, Plan } from "./schemas.ts";
 
 export class PipelineError extends Error {
@@ -30,6 +32,9 @@ interface Deps {
   settings: SettingsRepo;
   text: TextGenerator;
   embedder?: Embedder;
+  images?: ImageGenerator;
+  /** Where portrait PNGs are stored. */
+  portraitsDir?: string;
   log?: FastifyBaseLogger;
 }
 
@@ -48,9 +53,12 @@ export function createPipeline(deps: Deps) {
     return { requirements: current.requirements, hashBase: sha(current.requirements) };
   }
 
-  function definitions(requirements: Requirements, rows: Map<string, StageRow>): StageDef[] {
+  function definitions(projectId: string, requirements: Requirements, rows: Map<string, StageRow>): StageDef[] {
     const plan = rows.get("plan");
-    return buildStages(requirements, plan?.status === "done" ? (plan.output as Plan) : null);
+    return buildStages(requirements, plan?.status === "done" ? (plan.output as Plan) : null, {
+      settings: deps.projects.portraits(projectId),
+      available: !!deps.images?.describe(),
+    });
   }
 
   type Notes = Map<string, Array<{ round: number; note: string }>>;
@@ -90,7 +98,7 @@ export function createPipeline(deps: Deps) {
       return { running: jobs.has(projectId), stages: [], warnings: [], notes: [], ready: false, audit: null };
     }
     const hashBase = sha(current.requirements);
-    const defs = definitions(current.requirements, rows);
+    const defs = definitions(projectId, current.requirements, rows);
     const notes = deps.stages.notes(projectId, hashBase);
     const calls = deps.stages.callCounts(projectId);
     const stages: StageView[] = defs.map((def) => {
@@ -118,8 +126,7 @@ export function createPipeline(deps: Deps) {
       ? {
           fixRounds: deps.stages.fixRounds(projectId, hashBase),
           maxFixRounds: deps.settings.get().maxAutoFixAttempts,
-          checked: auditOut.checked,
-          notChecked: auditOut.notChecked,
+          ...portraitScope(rows, auditOut, deps.projects.portraits(projectId).enabled, !!deps.images?.describe()),
           findings: auditOut.findings.map((f) => ({
             id: f.id,
             area: f.area,
@@ -148,7 +155,7 @@ export function createPipeline(deps: Deps) {
         return;
       }
       const rows = deps.stages.all(projectId);
-      const defs = definitions(requirements, rows);
+      const defs = definitions(projectId, requirements, rows);
       const notes = deps.stages.notes(projectId, hashBase);
       if (rows.get("plan")?.status === "done") deps.stages.prune(projectId, defs.map((d) => d.id));
       const next = defs.find((def) => !isCurrent(def, hashBase, project.title, rows, notes));
@@ -180,6 +187,8 @@ export function createPipeline(deps: Deps) {
           return { notes: stageNotes, previous: sameBase ? row!.output : null };
         },
         embedder: deps.embedder ?? null,
+        images: deps.images ?? null,
+        portraits: { settings: deps.projects.portraits(projectId), dir: deps.portraitsDir ?? "portraits" },
         output: <T>(id: string) => {
           const row = rows.get(id);
           if (row?.status !== "done") throw new Error(`Stage ${id} has no result.`);
@@ -252,6 +261,31 @@ export function createPipeline(deps: Deps) {
     },
 
     /** The assembled package, once every stage is done. Contains the hidden story. */
+    /** The package with finished portraits attached, for export and push. Contains the hidden story. */
+    async exportable(projectId: string): Promise<AssembleOutput | null> {
+      const assembled = this.assembled(projectId);
+      if (!assembled) return null;
+      const rows = deps.stages.all(projectId);
+      // Only portraits of the current plan: turning portraits off must drop older ones from the export.
+      const current = new Set(state(projectId).stages.map((s) => s.id));
+      const portrait = async (stage: string) => {
+        const row = rows.get(stage);
+        return current.has(stage) && row?.status === "done" && deps.portraitsDir
+          ? portraitDataUrl(deps.portraitsDir, row.output as AvatarOutput)
+          : undefined;
+      };
+      const pkg = structuredClone(assembled.package);
+      for (const card of pkg.characters) {
+        const avatar = await portrait(`avatar:${card.key}`);
+        if (avatar) card.avatar = avatar;
+      }
+      if (pkg.persona) {
+        const avatar = await portrait("avatar:persona");
+        if (avatar) pkg.persona.avatar = avatar;
+      }
+      return { ...assembled, package: pkg };
+    },
+
     assembled(projectId: string): AssembleOutput | null {
       const s = state(projectId);
       if (!s.ready) return null;
@@ -263,6 +297,20 @@ export function createPipeline(deps: Deps) {
       await jobs.get(projectId)?.done;
     },
   };
+}
+
+/** Portraits are checked in their own stages; fold their results into the audit's scope lists. */
+function portraitScope(rows: Map<string, StageRow>, audit: AuditOutput, enabled: boolean, available: boolean) {
+  const notChecked = audit.notChecked.filter((line) => !line.startsWith("Portraits"));
+  const checked = [...audit.checked];
+  const avatars = [...rows.values()].filter((r) => r.stage.startsWith("avatar:") && r.status === "done").map((r) => (r.output as AvatarOutput).check);
+  if (!enabled) notChecked.push("Portraits (turned off for this adventure)");
+  else if (!available) notChecked.push("Portraits (no image model assigned)");
+  else if (avatars.length) {
+    const n = (c: string) => avatars.filter((x) => x === c).length;
+    checked.push(`Portraits against Appearance and style (vision review): ${n("match")} match, ${n("mismatch")} may not match, ${n("unchecked")} not checkable`);
+  } else notChecked.push("Portraits (not generated yet)");
+  return { checked, notChecked };
 }
 
 function describeFailure(error: unknown): { message: string; detail: string | null } {

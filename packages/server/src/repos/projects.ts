@@ -1,5 +1,12 @@
 import { randomUUID } from "node:crypto";
-import type { CreateProjectInput, Project, ProjectStatus, UpdateProjectInput } from "@adv/shared";
+import {
+  portraitSettingsSchema,
+  type CreateProjectInput,
+  type PortraitSettings,
+  type Project,
+  type ProjectStatus,
+  type UpdateProjectInput,
+} from "@adv/shared";
 import type { Db } from "../db/database.ts";
 
 interface ProjectRow {
@@ -56,6 +63,16 @@ export function createProjectsRepo(db: Db) {
         id,
       );
       return get(id);
+    },
+
+    portraits(id: string): PortraitSettings {
+      const row = db.prepare("SELECT portraits FROM project WHERE id = ?").get(id) as { portraits: string } | undefined;
+      const parsed = portraitSettingsSchema.safeParse(row ? JSON.parse(row.portraits) : {});
+      return parsed.success ? parsed.data : portraitSettingsSchema.parse({});
+    },
+
+    setPortraits(id: string, settings: PortraitSettings): void {
+      db.prepare("UPDATE project SET portraits = ?, updated_at = ? WHERE id = ?").run(JSON.stringify(settings), new Date().toISOString(), id);
     },
 
     setStatus(id: string, status: ProjectStatus): void {

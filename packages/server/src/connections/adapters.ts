@@ -33,6 +33,8 @@ const CODEX_CLIENT_VERSION = "1.0.0";
 export interface ChatTurn {
   role: "user" | "assistant";
   content: string;
+  /** Data URLs of images to show the model with this turn (vision). */
+  images?: string[];
 }
 
 export interface CompletionRequest {
@@ -52,6 +54,8 @@ export interface ProviderAdapter {
   complete(request: CompletionRequest): Promise<string>;
   testText(modelId: string): Promise<string>;
   testImage(modelId: string): Promise<string>;
+  /** One image as a data URL. Real request: uses quota or credits. The size is a request, not a guarantee. */
+  generateImage(modelId: string, prompt: string): Promise<string>;
   /** Embedding vectors, one per text, in order. */
   embed(modelId: string, texts: string[]): Promise<number[][]>;
 }
@@ -115,7 +119,17 @@ class OpenAICompatibleAdapter implements ProviderAdapter {
         headers: this.headers(true),
         body: JSON.stringify({
           model: modelId,
-          messages: [...(system ? [{ role: "system", content: system }] : []), ...messages],
+          messages: [
+            ...(system ? [{ role: "system", content: system }] : []),
+            ...messages.map((m) =>
+              m.images?.length
+                ? {
+                    role: m.role,
+                    content: [{ type: "text", text: m.content }, ...m.images.map((url) => ({ type: "image_url", image_url: { url } }))],
+                  }
+                : { role: m.role, content: m.content },
+            ),
+          ],
           ...(maxOutputTokens ? { max_tokens: maxOutputTokens } : {}),
           stream: false,
         }),
@@ -153,18 +167,22 @@ class OpenAICompatibleAdapter implements ProviderAdapter {
     return joinUrl(this.baseUrl, "images/generations");
   }
 
-  async testImage(modelId: string): Promise<string> {
+  async generateImage(modelId: string, prompt: string): Promise<string> {
     const json = await requestJson(
       this.fetch,
       this.imagesUrl(),
       {
         method: "POST",
         headers: this.headers(true),
-        body: JSON.stringify({ model: modelId, prompt: IMAGE_TEST_PROMPT, n: 1, size: "1024x1024" }),
+        body: JSON.stringify({ model: modelId, prompt, n: 1, size: "1024x1024" }),
       },
-      { label: `${this.label} image test`, timeoutMs: 180_000 },
+      { label: `${this.label} image (${modelId})`, timeoutMs: 180_000 },
     );
     return imageResultToDataUrl(this.fetch, json, this.label);
+  }
+
+  testImage(modelId: string): Promise<string> {
+    return this.generateImage(modelId, IMAGE_TEST_PROMPT);
   }
 }
 
@@ -315,7 +333,10 @@ class CodexAdapter implements ProviderAdapter {
           instructions: system || "You are a helpful assistant.",
           input: messages.map((m) => ({
             role: m.role,
-            content: [{ type: m.role === "assistant" ? "output_text" : "input_text", text: m.content }],
+            content: [
+              { type: m.role === "assistant" ? "output_text" : "input_text", text: m.content },
+              ...(m.images ?? []).map((url) => ({ type: "input_image", image_url: url })),
+            ],
           })),
           store: false,
           stream: true,
@@ -334,7 +355,7 @@ class CodexAdapter implements ProviderAdapter {
     return Promise.reject(new ProviderError("ChatGPT (Codex login) has no embedding models."));
   }
 
-  async testImage(modelId: string): Promise<string> {
+  async generateImage(modelId: string, prompt: string): Promise<string> {
     const auth = await this.auth.get();
     const json = await requestJson(
       this.fetch,
@@ -342,11 +363,16 @@ class CodexAdapter implements ProviderAdapter {
       {
         method: "POST",
         headers: { ...codexHeaders(auth), "Content-Type": "application/json", "x-codex-image-turn-id": randomUUID() },
-        body: JSON.stringify({ model: modelId, prompt: IMAGE_TEST_PROMPT, background: "opaque", quality: "auto", size: "1024x1024" }),
+        // The endpoint may ignore size (verified 2026-10-25: 1536x1024 for 1024x1024); callers crop.
+        body: JSON.stringify({ model: modelId, prompt, background: "opaque", quality: "auto", size: "1024x1024" }),
       },
-      { label: `${this.label} image test`, timeoutMs: 180_000 },
+      { label: `${this.label} image (${modelId})`, timeoutMs: 180_000 },
     );
     return imageResultToDataUrl(this.fetch, json, this.label);
+  }
+
+  testImage(modelId: string): Promise<string> {
+    return this.generateImage(modelId, IMAGE_TEST_PROMPT);
   }
 }
 

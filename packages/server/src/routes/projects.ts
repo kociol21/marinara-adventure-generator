@@ -1,8 +1,10 @@
+import { rm } from "node:fs/promises";
+import { join } from "node:path";
 import type { FastifyPluginAsync } from "fastify";
 import { createProjectSchema, updateProjectSchema } from "@adv/shared";
 import type { ProjectsRepo } from "../repos/projects.ts";
 
-export const projectRoutes: FastifyPluginAsync<{ projects: ProjectsRepo }> = async (app, { projects }) => {
+export const projectRoutes: FastifyPluginAsync<{ projects: ProjectsRepo; portraitsDir?: string }> = async (app, { projects, portraitsDir }) => {
   app.get("/", async () => projects.list());
 
   app.post("/", async (req, reply) => {
@@ -23,6 +25,8 @@ export const projectRoutes: FastifyPluginAsync<{ projects: ProjectsRepo }> = asy
 
   app.delete<{ Params: { id: string } }>("/:id", async (req, reply) => {
     if (!projects.delete(req.params.id)) return reply.status(404).send({ error: "Project not found" });
+    // Portrait files live outside the database; remove them with the project.
+    if (portraitsDir) await rm(join(portraitsDir, req.params.id), { recursive: true, force: true });
     return reply.status(204).send();
   });
 };

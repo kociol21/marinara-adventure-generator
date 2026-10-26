@@ -1,5 +1,10 @@
 import type { AdventurePackage, CardDraft, LorebookDraft, Requirements } from "@adv/shared";
 import type { Embedder } from "../generation/embeddings.ts";
+import sharp from "sharp";
+import type { PortraitSettings } from "@adv/shared";
+import type { ImageGenerator } from "../generation/images.ts";
+import { GenerationError } from "../generation/text.ts";
+import { portraitPrompt, portraitSettingsKey, savePortrait, type PortraitOutput, type PortraitSubject } from "./portraits.ts";
 import { runAudit } from "../audit/audit.ts";
 import type { AuditOutput } from "../audit/units.ts";
 import { adventurePackageSchema, lorebookEntryDraftSchema } from "@adv/shared";
@@ -23,7 +28,7 @@ import {
   type Plan,
 } from "./schemas.ts";
 import { cardPrompt, cluesPrompt, factsPrompt, lorebookPrompt, narrativeVoiceEntry, openingPrompt, personaPrompt, planPrompt } from "./prompts.ts";
-import type { z } from "zod";
+import { z } from "zod";
 import { scaleTargets, wordCount } from "./scale.ts";
 
 export interface StageContext {
@@ -41,6 +46,14 @@ export interface StageContext {
    */
   revision(stageId: string): { notes: Array<{ round: number; note: string }>; previous: unknown };
   embedder: Embedder | null;
+  images: ImageGenerator | null;
+  portraits: { settings: PortraitSettings; dir: string };
+}
+
+export interface PortraitOptions {
+  settings: PortraitSettings;
+  /** An image model is assigned. */
+  available: boolean;
 }
 
 export interface StageDef {
@@ -222,7 +235,7 @@ export function checkLorebook(out: LorebookOutput, expectedFacts: string[], card
 const plural = (n: number, word: string) =>
   `${n} ${n === 1 ? word : /[^aeiou]y$/.test(word) ? `${word.slice(0, -1)}ies` : `${word}s`}`;
 
-export function buildStages(requirements: Requirements, plan: Plan | null): StageDef[] {
+export function buildStages(requirements: Requirements, plan: Plan | null, portraits?: PortraitOptions): StageDef[] {
   const stages: StageDef[] = [
     {
       id: "plan",
@@ -368,7 +381,104 @@ export function buildStages(requirements: Requirements, plan: Plan | null): Stag
     },
   });
 
+  // Portraits come last and stand alone: re-rendering one never re-assembles or re-audits the package.
+  if (portraits?.settings.enabled && portraits.available) {
+    const version = portraitSettingsKey(portraits.settings);
+    for (const card of cards) {
+      stages.push({
+        id: `avatar:${card.key}`,
+        label: `Portrait: ${card.name}`,
+        deps: [`card:${card.key}`],
+        version,
+        run: (ctx) => {
+          const c = ctx.output<CardOutput>(`card:${card.key}`);
+          return renderPortrait(ctx, `avatar:${card.key}`, card.key, { name: card.name, appearance: c.appearance, imageAppearance: c.imageAppearance });
+        },
+        summary: portraitSummary,
+      });
+    }
+    if (requirements.protagonist.mode === "new") {
+      stages.push({
+        id: "avatar:persona",
+        label: "Portrait: your persona",
+        deps: ["persona"],
+        version,
+        run: (ctx) => {
+          const p = ctx.output<{ name: string; appearance: string }>("persona");
+          return renderPortrait(ctx, "avatar:persona", "persona", { name: p.name, appearance: p.appearance });
+        },
+        summary: portraitSummary,
+      });
+    }
+  }
+
   return stages;
+}
+
+// ── Portraits ──
+
+export interface AvatarOutput extends PortraitOutput {
+  /** Vision check against Appearance and style: passed, kept after a failed retry, or not possible. */
+  check: "match" | "mismatch" | "unchecked";
+}
+
+const portraitSummary = (o: unknown) => {
+  const a = o as AvatarOutput;
+  return `${a.width}×${a.height} portrait, ${a.check === "match" ? "matches its description" : a.check === "mismatch" ? "may not match its description" : "not checked against its description"}`;
+};
+
+const portraitCheckSchema = z.object({
+  matches: z.boolean(),
+  problems: z.array(z.string().trim().min(1).max(300)).max(8).default([]),
+});
+
+/**
+ * Generate, crop and check one portrait (spec §12.8). A vision review compares it with the
+ * appearance and the style; on a mismatch the portrait is redrawn once with the problems named.
+ * When the text model cannot see images, the portrait is kept and marked unchecked.
+ */
+async function renderPortrait(ctx: StageContext, stageId: string, fileKey: string, subject: PortraitSubject): Promise<AvatarOutput> {
+  if (!ctx.images) throw new GenerationError("No image model is assigned.", "not-assigned");
+  const basePrompt = portraitPrompt(ctx.requirements, ctx.portraits.settings, subject);
+  let prompt = basePrompt;
+  let check: AvatarOutput["check"] = "unchecked";
+  let image = await ctx.images.portrait(prompt, ctx.projectId, stageId);
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const thumb = await sharp(image.png).resize(512, 512).jpeg({ quality: 80 }).toBuffer();
+    let verdict: z.infer<typeof portraitCheckSchema>;
+    try {
+      verdict = await ctx.text.generateJson(
+        portraitCheckSchema,
+        {
+          projectId: ctx.projectId,
+          purpose: `${stageId}:check`,
+          system: `Stage: portrait-check
+You check a generated character portrait against its description before it goes on a character card.
+Character: ${subject.name}
+Appearance: ${subject.imageAppearance?.trim() || subject.appearance}
+Requested style: ${basePrompt.split("\n")[1]}
+It matches when the visible features fit the description (apparent age, build, hair, skin or species, clothing, distinctive marks), it shows one person in the requested style, and it has no text or watermark. Small artistic liberties are fine.
+Reply with ONLY JSON: {"matches": true, "problems": ["short, concrete differences"]}`,
+          messages: [{ role: "user", content: "Check this portrait.", images: [`data:image/jpeg;base64,${thumb.toString("base64")}`] }],
+        },
+        ctx.repairAttempts,
+      );
+    } catch {
+      // No vision on this model, or the check failed: keep the portrait, say it was not checked.
+      check = "unchecked";
+      break;
+    }
+    if (verdict.matches) {
+      check = "match";
+      break;
+    }
+    check = "mismatch";
+    if (attempt === 1) break;
+    prompt = `${basePrompt}\nThe previous attempt got these wrong; fix them: ${verdict.problems.join("; ")}.`;
+    image = await ctx.images.portrait(prompt, ctx.projectId, stageId);
+  }
+  const saved = await savePortrait(ctx.portraits.dir, ctx.projectId, fileKey, image.png);
+  return { ...saved, width: image.width, height: image.height, check };
 }
 
 /** Stages the audit can name as targets, with labels that show only what the player may see. */

@@ -135,4 +135,8 @@ export const migrations: string[] = [
     PRIMARY KEY (project_id, basis)
   );
   `,
+  `
+  -- Portrait settings (style, notes, on/off) as JSON; kept apart from the requirements.
+  ALTER TABLE project ADD COLUMN portraits TEXT NOT NULL DEFAULT '{}';
+  `,
 ];

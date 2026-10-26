@@ -7,3 +7,4 @@ minimumReleaseAge: 1440
 # Dependencies permitted to run install scripts.
 allowBuilds:
   esbuild: true
+  sharp: true

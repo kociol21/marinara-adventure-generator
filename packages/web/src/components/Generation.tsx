@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { GenerationState, StageView } from "@adv/shared";
 import { api } from "../api.ts";
 import { AuditReport } from "./AuditReport.tsx";
+import { Portraits } from "./Portraits.tsx";
 
 const ICON: Record<StageView["status"], string> = {
   pending: "○",
@@ -121,6 +122,8 @@ export function Generation({ projectId }: { projectId: string }) {
         )}
       </div>
       {(start.isError || retry.isError) && <p className="error">{(start.error ?? retry.error)?.message}</p>}
+
+      <Portraits projectId={projectId} running={s.running} />
 
       {s.audit && !s.running && (
         <AuditReport
