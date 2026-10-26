@@ -124,9 +124,11 @@ describe("portrait stages", () => {
 
     const zip = readZip((await app.inject({ method: "GET", url: `/api/projects/${id}/export`, headers: { host } })).rawPayload);
     const alpha = JSON.parse(zip.get("probe-case/characters/probe-alpha.marinara.json")!.toString());
-    expect(alpha.data.avatar).toMatch(/^data:image\/png;base64,/);
+    expect(alpha.data.avatar).toMatch(/^data:image\/webp;base64,/);
+    const embedded = await sharp(Buffer.from(alpha.data.avatar.split(",")[1], "base64")).metadata();
+    expect([embedded.format, embedded.width]).toEqual(["webp", 768]);
     const persona = JSON.parse(zip.get("probe-case/persona/probe-investigator.marinara.json")!.toString());
-    expect(persona.data.avatar).toMatch(/^data:image\/png;base64,/);
+    expect(persona.data.avatar).toMatch(/^data:image\/webp;base64,/);
     expect(state.audit!.checked.join(" ")).toMatch(/Portraits against Appearance and style \(vision review\): 3 match/);
   });
 

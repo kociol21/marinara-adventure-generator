@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
+import sharp from "sharp";
 import { PORTRAIT_STYLES, type PortraitSettings, type Requirements } from "@adv/shared";
 
 export interface PortraitSubject {
@@ -52,7 +53,8 @@ export async function savePortrait(dir: string, projectId: string, name: string,
   return { file, sha256 };
 }
 
+/** The stored PNG stays the original; exports embed WebP, which Marinara's importer accepts and is several times smaller. */
 export async function portraitDataUrl(dir: string, output: PortraitOutput): Promise<string> {
-  const png = await readFile(join(dir, output.file));
-  return `data:image/png;base64,${png.toString("base64")}`;
+  const webp = await sharp(join(dir, output.file)).webp({ quality: 86 }).toBuffer();
+  return `data:image/webp;base64,${webp.toString("base64")}`;
 }
