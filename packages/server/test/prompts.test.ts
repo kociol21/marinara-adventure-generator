@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { requirementsSchema } from "@adv/shared";
-import { brief, narrativeVoiceEntry, voiceRule } from "../src/pipeline/prompts.ts";
+import { brief, factsPrompt, narrativeVoiceEntry, openingPrompt, planPrompt, voiceRule } from "../src/pipeline/prompts.ts";
+import { factsSchema, planSchema } from "../src/pipeline/schemas.ts";
+import fixture from "../../../tools/marinara-test/pipeline-fixture.json" with { type: "json" };
 
 const styled = requirementsSchema.parse({
   tone: ["hard-boiled"],
@@ -26,5 +28,28 @@ describe("prose voice", () => {
   it("carries the voice into every stage brief and skips the entry without a style", () => {
     expect(brief(styled)).toMatch(/Prose voice: terse sentences, wry similes \(in the manner of Raymond Chandler\); intensity light/);
     expect(narrativeVoiceEntry(unstyled)).toBeNull();
+  });
+});
+
+describe("stories without a mystery", () => {
+  const mystery = planSchema.parse({ ...fixture.plan, isMystery: true });
+  const romance = planSchema.parse({ ...fixture.plan, isMystery: false, truth: { ...fixture.plan.truth, culprit: null, motive: "", method: "" } });
+  const facts = factsSchema.parse(fixture.facts);
+  const card = { name: "X", scenario: "", personality: "" };
+
+  it("lets the plan skip the culprit, motive and method unless solving something is the point", () => {
+    const p = planPrompt(requirementsSchema.parse({ genre: "slice of life romance" }));
+    expect(p).toMatch(/Set isMystery to true only when solving something/);
+    expect(p).toMatch(/do not invent a crime or puzzle/);
+    expect(planPrompt(requirementsSchema.parse({ genre: "noir detective" }))).toMatch(/This is a mystery: fix the truth now \(culprit, motive, method, timeline\)/);
+  });
+
+  it("asks for secrets and relationships instead of a case in facts and the Secret Plot", () => {
+    const r = requirementsSchema.parse({});
+    expect(factsPrompt(r, romance)).not.toMatch(/the method, the motive|alibis|truth of the case/);
+    expect(factsPrompt(r, mystery)).toMatch(/the method, the motive/);
+    expect(openingPrompt(r, romance, card, facts)).not.toMatch(/its mystery/);
+    expect(openingPrompt(r, romance, card, facts)).toMatch(/no puzzle to solve/);
+    expect(openingPrompt(r, mystery, card, facts)).toMatch(/the arc, its mystery, resolution conditions/);
   });
 });

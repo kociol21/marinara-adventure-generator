@@ -52,10 +52,11 @@ export function planPrompt(r: Requirements): string {
 ${COMMON}
 
 Design the adventure's foundation: the objective truth, the cast and the world's important things.
+The truth is what is really going on beneath what the player sees. In a mystery it is the case. In other stories it is the hidden side of the situation: the past that shapes the present, what characters keep to themselves, the pressures and feelings that will surface in play (a past marriage, an unspoken love, a debt, a family rift).
 Size for a ${r.scale.length} adventure: at least ${t.entities} entities, including at least ${t.locations} locations the player can visit, at least ${t.minorCharacters} minor characters without cards (witnesses, rivals, fixers, officials), at least one organization and the items that matter. A living world has more people and places than the card cast; every one of them still needs a function.
 - Build a situation with motives and conflicts that reacts to the player, not a fixed sequence of scenes.
-- ${r.genre.toLowerCase().includes("myster") || r.genre.toLowerCase().includes("detective") || r.genre.toLowerCase().includes("noir") ? "This is a mystery: fix the truth now (culprit, motive, method, timeline). It must not change later." : "If the premise involves a mystery, fix its truth now; otherwise set isMystery to false."}
-- Supernatural rules that the solution depends on must be part of the world from the start, not invented for the finale.
+- ${r.genre.toLowerCase().includes("myster") || r.genre.toLowerCase().includes("detective") || r.genre.toLowerCase().includes("noir") ? "This is a mystery: fix the truth now (culprit, motive, method, timeline). It must not change later." : "Set isMystery to true only when solving something (a crime, a puzzle, who or what is behind events) is the point of the requirements. Otherwise set it to false, leave culprit null and motive and method empty, and do not invent a crime or puzzle: romance, slice of life and character stories run on relationships, and their secrets are things to discover about people, not cases to solve. Fix the truth and its timeline now either way."}
+- Supernatural rules that the story depends on must be part of the world from the start, not invented for the finale.
 - Cast: mark at most ${r.maxNpcCards} characters with isCard=true; fewer is fine. Every character needs a function in the story. The protagonist is NOT an entity here.
 - One card character opens the adventure with the starting situation; give its key as openingCardKey.
 - publicDescription must contain only what anyone could know; hidden things go into role, truth and threads.
@@ -65,11 +66,12 @@ Size for a ${r.scale.length} adventure: at least ${t.entities} entities, includi
 ${brief(r)}
 
 ${JSON_ONLY}
-{"premise": "...", "isMystery": true, "truth": {"summary": "...", "timeline": [{"when": "...", "what": "..."}], "culprit": "entity-key or null", "motive": "...", "method": "..."}, "entities": [{"key": "kebab-case", "type": "character|location|organization|item|concept", "name": "...", "aliases": ["..."], "publicDescription": "...", "role": "...", "isCard": false}], "threads": [{"key": "...", "name": "...", "description": "..."}], "openingCardKey": "..."}`;
+{"premise": "...", "isMystery": false, "truth": {"summary": "...", "timeline": [{"when": "...", "what": "..."}], "culprit": "entity-key or null", "motive": "... or empty", "method": "... or empty"}, "entities": [{"key": "kebab-case", "type": "character|location|organization|item|concept", "name": "...", "aliases": ["..."], "publicDescription": "...", "role": "...", "isCard": false}], "threads": [{"key": "...", "name": "...", "description": "..."}], "openingCardKey": "..."}`;
 }
 
 export function factsPrompt(r: Requirements, plan: Plan): string {
   const cards = plan.entities.filter((e) => e.isCard).map((e) => e.key);
+  const mystery = plan.isMystery;
   return `Stage: facts
 ${COMMON}
 
@@ -84,14 +86,14 @@ Homes:
 - {"kind":"card","card":"<card key>","field":"description|personality|backstory|appearance|scenario"} for core identity of card characters (${cards.join(", ")}). Field rules: description = identity and role; personality = motives, values, contradictions, temperament, reactions under pressure; backstory = past, origins, relationships, distinguishing facts from beliefs; appearance = looks and clothing; scenario = the character's starting context only.
 - {"kind":"lorebook","lorebook":"world"} for setting rules, places, organizations, history, magic, customs.
 - {"kind":"lorebook","lorebook":"characters"} for minor characters and extra knowledge about card characters that needs its own trigger.
-- {"kind":"lorebook","lorebook":"plot"} for the truth of the case, timeline, clues, secrets and what unlocks them.
+- {"kind":"lorebook","lorebook":"plot"} for ${mystery ? "the truth of the case, timeline, clues, secrets and what unlocks them" : "the hidden truth, its timeline, secrets and what brings them out"}.
 Coverage (this registry is the narrator's only source; what is missing here does not exist in play):
 - every location: what it looks, sounds and smells like, who is usually there, what happens there, what can be found or learned there;
 - every character: goals, relationships, what they know, what they hide, how they behave with strangers;
 - every organization and item: what it is, who controls it, why it matters;
 - the world: how the supernatural works day to day, institutions, customs, prejudices, prices and dangers that colour scenes;
-- the truth: the full timeline, the method, the motive, and what physical and testimonial traces each event left.
-Perspectives: give every card character at least ${scaleTargets(r).perspectivesPerCard} beliefs or claims of their own (alibis, half-truths, lies, wrong guesses about others), linked with contradicts when they are false. Minor characters should have them too where they matter. Mysteries live on what people say versus what is true.
+- ${mystery ? "the truth: the full timeline, the method, the motive, and what physical and testimonial traces each event left." : "the truth: the past that shapes the present, each secret, who knows it, and what could bring it out in play."}
+Perspectives: give every card character at least ${scaleTargets(r).perspectivesPerCard} beliefs or claims of their own (${mystery ? "alibis, half-truths, lies, wrong guesses about others" : "hopes, misreadings of others, things left unsaid, half-truths"}), linked with contradicts when they are false. Minor characters should have them too where they matter. ${mystery ? "Mysteries live on what people say versus what is true." : "Relationships live on what people feel, say and assume about each other."}
 Rules: no duplicates (the same fact in other words is a duplicate); prefer lorebooks for secrets a card character holds, so they can be private to that character; write ${scaleTargets(r).facts[0]}-${scaleTargets(r).facts[1]} facts, each a concrete, specific sentence. Ids are f1, f2, … in order. ${voiceRule(r, "internal")}
 
 ${brief(r)}
@@ -184,7 +186,7 @@ ${JSON_ONLY}
 const LOREBOOK_PURPOSE: Record<LorebookKey, string> = {
   world: "World: setting rules, places, organizations, history, magic and customs.",
   characters: "Characters: minor characters (their goals, relations, knowledge) and extra knowledge about card characters that needs its own trigger.",
-  plot: "Plot: the truth of the case, timeline, clues, secrets, dependencies and what unlocks information.",
+  plot: "Plot: the hidden truth and its timeline, secrets, clues where there are any, dependencies and what unlocks information.",
 };
 
 /** The places where each clue fact is found, in clue order (one fact may surface at several). */
@@ -270,7 +272,7 @@ Write three things:
 1. teaser: 2-3 sentences for the player's library. Spoiler-free: only the premise the player already knows from the starting situation and the mood. No secrets, culprits, twists, hidden motives or names that hint at them.
 2. openingMessage: ${openingCard.name}'s First Message that plays the starting situation ("${r.startingSituation}"). In ${r.narration.pov} person, ${r.narration.tense} tense. Show ${openingCard.name}'s voice, hand the scene to the player, and never decide {{user}}'s actions, words or feelings. No secrets stated outright.
 3. secretPlot: the Narrative Director's hidden long-term arc, consistent with the truth:
-   description (2-4 sentences: the arc, its mystery, resolution conditions, the protagonist's journey), protagonistArc (1-2 sentences), characterArc (1-2 sentences about ${openingCard.name}), sceneDirections (3-6 short beats the story could pass through, not fixed scenes), pacing (one phrase).
+   description (2-4 sentences: ${plan.isMystery ? "the arc, its mystery, resolution conditions, the protagonist's journey" : "the arc, the hidden truth and how it could come out, what the story builds toward, the protagonist's journey; no puzzle to solve"}), protagonistArc (1-2 sentences), characterArc (1-2 sentences about ${openingCard.name}), sceneDirections (3-6 short beats the story could pass through, not fixed scenes), pacing (one phrase).
 Voice of openingMessage: ${voiceRule(r, "play")}
 Voice of teaser: ${voiceRule(r, "descriptive")}
 secretPlot: ${voiceRule(r, "internal")}
