@@ -56,7 +56,14 @@ Paczka „Probe Harbor”, Marinara 2.5.1 (staging), katalog `vendor/marinara-te
   - przygoda została w lokalnej instancji (`vendor/marinara-test-data`).
 - **Zachowanie Directora przy pierwszej odpowiedzi:** że ze znacznikiem nie przepisuje planu, potwierdziła weryfikacja techniczna (docs/01, sekcja 3). W M8 nie generowałem odpowiedzi w Marinarze.
 
+## Push na VPS (26 października 2026 r., za zgodą użytkownika)
+
+- **Adres:** Marinara staging jest pod `https://vps-ce03a41d.tail860c71.ts.net:9443`. Według `tailscale serve status` ten port prowadzi do `127.0.0.1:7861`, kontenera `marinara-staging`.
+  - Główny adres hosta prowadzi do innej aplikacji („Hermes Agent”). To jej API zwracało wcześniej 401.
+  - Dostęp przez Tailscale jest zaufany, więc login nie był potrzebny.
+- **Wynik:** wersja 2.5.1, Director zainstalowany. Push „Woman in Red”: wszystkie 8 kroków zaliczone, odczyt kontrolny zgodny, 3 portrety kart jako WebP.
+- **Zostaje do zrobienia ręcznie:** czat nie ma przypisanego połączenia z modelem ani presetu, bo na VPS nie ma połączenia domyślnego. Wybiera się je w ustawieniach czatu przed pierwszą wiadomością.
+
 ## Co zostaje
 
-- **Próba na VPS:** wymaga twojej zgody i danych logowania Marinary, bo API zwraca 401 bez logowania.
 - **Wektory na prawdziwym modelu embeddingów:** ścieżka jest przetestowana na atrapie, a „Woman in Red” nie ma lorebooków z wyszukiwaniem semantycznym.
