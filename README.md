@@ -187,4 +187,4 @@ The design documents are written in Polish:
 
 ## License
 
-[MIT](LICENSE) © 2026 Wojciech Kotliński. You may use, change and share this project, including inside your own projects, as long as you keep the copyright notice and the license text. A mention of this project in your README is appreciated.
+[MIT](LICENSE) © 2026. You may use, change and share this project, including inside your own projects, as long as you keep the copyright notice and the license text. A mention of this project in your README is appreciated.
