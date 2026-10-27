@@ -38,9 +38,12 @@ describe("stories without a mystery", () => {
   const card = { name: "X", scenario: "", personality: "" };
 
   it("lets the plan skip the culprit, motive and method unless solving something is the point", () => {
-    const p = planPrompt(requirementsSchema.parse({ genre: "slice of life romance" }));
-    expect(p).toMatch(/Set isMystery to true only when solving something/);
-    expect(p).toMatch(/do not invent a crime or puzzle/);
+    for (const genre of ["slice of life romance", "dark fantasy", "post-apocalyptic drama"]) {
+      const p = planPrompt(requirementsSchema.parse({ genre }));
+      expect(p).toMatch(/Set isMystery to true only when the requirements make solving a case the point of play/);
+      expect(p).toMatch(/do not invent a crime or puzzle/);
+      expect(p).toMatch(/there is always something to discover/);
+    }
     expect(planPrompt(requirementsSchema.parse({ genre: "noir detective" }))).toMatch(/This is a mystery: fix the truth now \(culprit, motive, method, timeline\)/);
   });
 
