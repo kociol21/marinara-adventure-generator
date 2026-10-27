@@ -1,6 +1,6 @@
 # Marinara Adventure Generator
 
-**Version 0.3.0.** This is a local web app that builds a complete, ready-to-play adventure for [Marinara Engine](https://github.com/Pasta-Devs/Marinara-Engine) and keeps the plot hidden from you, the player, while it works.
+**Version 0.4.0.** This is a local web app that builds a complete, ready-to-play adventure for [Marinara Engine](https://github.com/Pasta-Devs/Marinara-Engine) and keeps the plot hidden from you, the player, while it works.
 
 You describe the story you want in a few sentences, in any language, and answer some short questions about your preferences. The app then writes the whole adventure:
 
@@ -151,7 +151,7 @@ The generator talks to Marinara's HTTP API from its own server, never from your 
 - All generated content is in English. Your pitch can be in any language.
 - A full adventure takes dozens of model requests. On paid APIs this costs real money. The Generation tab shows requests, tokens and cost (or subscription quota) per stage, and the start dialog forecasts the next run from your earlier adventures. Prices come from the provider's model list: press **Fetch models** on a connection once to load them.
 - Up to 3 stages run at the same time by default (Settings → **Stages running at the same time**). Lower it if your provider reports rate limits; rate-limited requests are retried after a pause.
-- Quality depends heavily on the text model. Strong models give much better mysteries.
+- Quality depends heavily on the text model. Strong models give much better stories; the optional story model lets you pay for one only where it matters most.
 - This is not an official Marinara project.
 
 ## For developers
