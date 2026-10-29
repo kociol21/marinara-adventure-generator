@@ -199,7 +199,34 @@ describe("tests", () => {
     const conn = await create({ kind: "nano-gpt", name: "Nano", apiKey: "k" });
     const res = await post(`/api/connections/${conn.id}/test-image`, { modelId: "flux-dev", confirmUsage: true });
     expect(res.json()).toMatchObject({ ok: true, imageDataUrl: "data:image/png;base64,aGVsbG8=" });
-    expect(requests[0]!.url).toBe("https://nano-gpt.com/v1/images/generations");
+    const image = requests.find((r) => r.method === "POST")!;
+    expect(image.url).toBe("https://nano-gpt.com/v1/images/generations");
+    // No model details to go by: the size most models accept.
+    expect(image.body).toMatchObject({ model: "flux-dev", size: "1024x1024" });
+  });
+
+  it("asks each NanoGPT image model for a square portrait in the sizes it lists", async () => {
+    const { requests } = await setup({
+      "GET nano-gpt.com/api/v1/image-models?detailed=true": () => ({
+        json: {
+          data: [
+            { id: "nano-banana-2.1", supported_parameters: { resolutions: ["1k", "2k"], aspect_ratio: ["auto", "1:1", "16:9"] } },
+            { id: "gpt-image-2", supported_parameters: { resolutions: ["1024x768", "1536x1024", "1024x1024", "2048x2048"] } },
+          ],
+        },
+      }),
+      "POST nano-gpt.com/v1/images/generations": () => ({ json: { data: [{ b64_json: "aGVsbG8=" }] } }),
+    });
+    const conn = await create({ kind: "nano-gpt", name: "Nano", apiKey: "k" });
+    for (const modelId of ["nano-banana-2.1", "gpt-image-2"]) {
+      expect((await post(`/api/connections/${conn.id}/test-image`, { modelId, confirmUsage: true })).json().ok).toBe(true);
+    }
+    const bodies = requests.filter((r) => r.method === "POST").map((r) => r.body);
+    expect(bodies[0]).toMatchObject({ model: "nano-banana-2.1", size: "1k", aspect_ratio: "1:1" });
+    expect(bodies[1]).toMatchObject({ model: "gpt-image-2", size: "1024x1024" });
+    expect(bodies[1]).not.toHaveProperty("aspect_ratio");
+    // The details are fetched once, not per image.
+    expect(requests.filter((r) => r.url.includes("image-models"))).toHaveLength(1);
   });
 
   it("lists Nano's decision models from its catalog, with subscription coverage", async () => {

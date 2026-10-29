@@ -261,6 +261,11 @@ class OpenAICompatibleAdapter implements ProviderAdapter {
     return joinUrl(this.baseUrl, "images/generations");
   }
 
+  /** Size fields for a square portrait; providers with per-model rules override this. */
+  protected async imageSize(_modelId: string): Promise<Record<string, string>> {
+    return { size: "1024x1024" };
+  }
+
   async generateImage(modelId: string, prompt: string): Promise<string> {
     const json = await requestJson(
       this.fetch,
@@ -268,7 +273,7 @@ class OpenAICompatibleAdapter implements ProviderAdapter {
       {
         method: "POST",
         headers: this.headers(true),
-        body: JSON.stringify({ model: modelId, prompt, n: 1, size: "1024x1024" }),
+        body: JSON.stringify({ model: modelId, prompt, n: 1, ...(await this.imageSize(modelId)) }),
       },
       { label: `${this.label} image (${modelId})`, timeoutMs: 180_000 },
     );
@@ -317,6 +322,35 @@ class OpenAICompatibleAdapter implements ProviderAdapter {
   }
 }
 
+interface ImageParams {
+  resolutions: string[];
+  aspectRatios: string[];
+}
+
+const IMAGE_PARAMS_TTL_MS = 60 * 60 * 1000;
+const imageParams = new Map<string, { at: number; models: Map<string, ImageParams> }>();
+
+/** The listed size closest to a 1024px square, plus a 1:1 aspect ratio when the model takes one. */
+export function squareImageSize(p: ImageParams | undefined): Record<string, string> {
+  const sizes = p?.resolutions ?? [];
+  const aspect: Record<string, string> = p?.aspectRatios.includes("1:1") ? { aspect_ratio: "1:1" } : {};
+  const pixels = sizes
+    .map((v) => ({ v, m: v.match(/^(\d+)\s*[x*]\s*(\d+)$/i) }))
+    .filter((x) => x.m)
+    .map(({ v, m }) => ({ v, w: Number(m![1]), h: Number(m![2]) }));
+  const tiers = sizes.map((v) => ({ v, k: v.match(/^(\d+(?:\.\d+)?)k$/i) })).filter((x) => x.k);
+  let size: string | undefined;
+  if (pixels.length) {
+    const cost = (x: { w: number; h: number }) => (x.w === x.h ? 0 : 1e7) + Math.abs(x.w * x.h - 1024 * 1024);
+    size = [...pixels].sort((a, b) => cost(a) - cost(b))[0]!.v;
+  } else if (tiers.length) {
+    size = [...tiers].sort((a, b) => Number(a.k![1]) - Number(b.k![1]))[0]!.v;
+  } else {
+    size = ["square_hd", "square", "1:1", "auto"].find((v) => sizes.includes(v)) ?? sizes[0];
+  }
+  return { size: size ?? "1024x1024", ...aspect };
+}
+
 class NanoGptAdapter extends OpenAICompatibleAdapter {
   override async listModels(capability: Capability): Promise<CatalogEntry[]> {
     if (capability === "text") {
@@ -356,6 +390,34 @@ class NanoGptAdapter extends OpenAICompatibleAdapter {
       return listed.length ? listed : DECISION_MODELS.map((m) => entry(m.id, m.name, { source: "builtin", billing: "unknown" }));
     }
     return [];
+  }
+
+  /**
+   * NanoGPT image models each take their own size values ("1024x1024", "1k", "square_hd", "1:1"),
+   * and reject the others; its detailed model list says which, so the request picks from it.
+   */
+  protected override async imageSize(modelId: string): Promise<Record<string, string>> {
+    const cached = imageParams.get(this.baseUrl);
+    let params = cached && Date.now() - cached.at < IMAGE_PARAMS_TTL_MS ? cached.models : null;
+    if (!params) {
+      try {
+        const json = await requestJson(this.fetch, joinUrl(this.baseUrl, "image-models?detailed=true"), { headers: this.headers() }, {
+          label: `${this.label} image model details`,
+        });
+        params = new Map();
+        for (const m of dataArray(json)) {
+          const sp = isRecord(m.supported_parameters) ? m.supported_parameters : null;
+          if (typeof m.id !== "string" || !sp) continue;
+          const strings = (v: unknown) => (Array.isArray(v) ? v.filter((x): x is string => typeof x === "string") : []);
+          params.set(m.id, { resolutions: strings(sp.resolutions), aspectRatios: strings(sp.aspect_ratio) });
+        }
+        imageParams.set(this.baseUrl, { at: Date.now(), models: params });
+      } catch {
+        // Without the details, ask for the size most models accept.
+        return { size: "1024x1024" };
+      }
+    }
+    return squareImageSize(params.get(modelId));
   }
 
   /** NanoGPT serves images under /v1/images/generations, not under the /api/v1 text prefix. */
