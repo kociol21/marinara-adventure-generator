@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { requirementsSchema } from "@adv/shared";
-import { checkFacts, checkLorebook, checkPlan, withWholeWordsForShortKeys } from "../src/pipeline/stages.ts";
+import { checkFacts, checkLorebook, checkPlan, resolveFactKeys, withWholeWordsForShortKeys } from "../src/pipeline/stages.ts";
 import { planSchema, factsSchema, lorebookOutputSchema } from "../src/pipeline/schemas.ts";
 import fixture from "../../../tools/marinara-test/pipeline-fixture.json" with { type: "json" };
 
@@ -61,5 +61,35 @@ describe("richness checks", () => {
     const small = { ...plan, entities: plan.entities.slice(0, 8) };
     expect(checkPlan(small, oneShot).filter((p) => p.includes("entities"))).toEqual([]);
     expect(checkPlan(small, medium).some((p) => p.includes("entities"))).toBe(true);
+  });
+});
+
+describe("fact keys the plan does not have", () => {
+  const base = facts.facts[0]!;
+  const fact = (id: string, subject: string, statement: string, holder: string | null = null) => ({ ...base, id, subject, statement, holder });
+
+  it("are filed under the closest entity instead of failing the whole registry", () => {
+    const fixed = resolveFactKeys(
+      {
+        facts: [
+          ...facts.facts,
+          fact("f901", "harbor-master", "The master of the Probe Harbor keeps a second book."),
+          fact("f902", "old-lantern-room", "Nobody goes there."),
+          fact("f903", "probe-room", "The Probe Tavern and the Probe Office share a wall."),
+          fact("f904", "beta", "Thinks the Probe Gamma lied.", "beta-sister"),
+          fact("f905", "zzz-unknown", "Nothing anyone would recognise."),
+        ],
+      },
+      plan,
+    );
+    const byId = (id: string) => fixed.facts.find((f) => f.id === id)!;
+    expect(byId("f901").subject).toBe("harbor");
+    expect(byId("f902").subject).toBe("lantern");
+    // Shared words tie ("probe"), so the entity the statement names first wins.
+    expect(byId("f903").subject).toBe("tavern");
+    expect(byId("f904").holder).toBe("beta");
+    expect(byId("f905").subject).toBe("zzz-unknown");
+    expect(fixed.facts.slice(0, facts.facts.length)).toEqual(facts.facts);
+    expect(checkFacts(fixed, plan, medium).filter((p) => p.includes("not an entity key"))).toEqual([expect.stringContaining("f905")]);
   });
 });

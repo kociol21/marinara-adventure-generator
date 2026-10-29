@@ -32,6 +32,7 @@ import {
   type PlotOutput,
   titleSchema,
   type TitleOutput,
+  type Entity,
 } from "./schemas.ts";
 import { cardPrompt, clueGroups, cluePlaces, cluesPrompt, factsPrompt, lorebookPrompt, narrativeVoiceEntry, openingPrompt, personaPrompt, planPrompt, titlePrompt } from "./prompts.ts";
 import { z } from "zod";
@@ -162,6 +163,36 @@ export function checkPlan(plan: Plan, requirements: Requirements): string[] {
   if (!cards.some((c) => c.key === plan.openingCardKey)) problems.push("openingCardKey must be one of the isCard characters");
   if (plan.truth.culprit && !keys.has(plan.truth.culprit)) problems.push("truth.culprit is not an entity key");
   return problems;
+}
+
+/**
+ * A long registry often files a few facts under an entity the plan does not have. Asking for the
+ * whole registry again only trades those slips for new ones, so the code moves such a fact to the
+ * entity whose key shares the most words with the invented one, then to one its statement names
+ * (earliest first). Keys it cannot place are left for checkFacts to report.
+ */
+export function resolveFactKeys(facts: Facts, plan: Plan): Facts {
+  const keys = new Set(plan.entities.map((e) => e.key));
+  const characters = plan.entities.filter((e) => e.type === "character");
+  const words = (s: string) => new Set(s.toLowerCase().split(/[^a-z0-9]+/).filter((w) => w.length > 2));
+  const resolve = (bad: string, statement: string, pool: Entity[]): string | null => {
+    const text = statement.toLowerCase();
+    const wanted = words(bad);
+    const scored = pool.map((e) => {
+      const own = words(`${e.key} ${e.name} ${e.aliases.join(" ")}`);
+      const at = Math.min(...[e.name, ...e.aliases].filter((n) => n.length > 2).map((n) => text.indexOf(n.toLowerCase())).filter((i) => i >= 0), Infinity);
+      return { key: e.key, at, score: 2 * [...wanted].filter((w) => own.has(w)).length + (at < Infinity ? 1 : 0) };
+    });
+    const best = scored.sort((a, b) => b.score - a.score || a.at - b.at)[0];
+    return best && best.score > 0 ? best.key : null;
+  };
+  return {
+    facts: facts.facts.map((f) => {
+      const subject = keys.has(f.subject) ? f.subject : (resolve(f.subject, f.statement, plan.entities) ?? f.subject);
+      const holder = !f.holder || keys.has(f.holder) ? f.holder : (resolve(f.holder, f.statement, characters) ?? f.holder);
+      return subject === f.subject && holder === f.holder ? f : { ...f, subject, holder };
+    }),
+  };
 }
 
 export function checkFacts(facts: Facts, plan: Plan, requirements: Requirements): string[] {
@@ -358,7 +389,8 @@ export function buildStages(requirements: Requirements, plan: Plan | null, portr
     deps: ["plan"],
     run: (ctx) => {
       const p = ctx.output<Plan>("plan");
-      return llmStage(ctx, "facts", factsSchema, factsPrompt(ctx.requirements, p), (f) => checkFacts(f, p, ctx.requirements));
+      const schema = factsSchema.transform((f) => resolveFactKeys(f, p));
+      return llmStage(ctx, "facts", schema, factsPrompt(ctx.requirements, p), (f) => checkFacts(f, p, ctx.requirements));
     },
     summary: (o) => plural((o as Facts).facts.length, "fact"),
   });
