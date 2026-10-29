@@ -1,6 +1,6 @@
 # Marinara Adventure Generator
 
-**Version 0.4.0.** This is a local web app that builds a complete, ready-to-play adventure for [Marinara Engine](https://github.com/Pasta-Devs/Marinara-Engine) and keeps the plot hidden from you, the player, while it works.
+**Version 0.4.1.** This is a local web app that builds a complete, ready-to-play adventure for [Marinara Engine](https://github.com/Pasta-Devs/Marinara-Engine) and keeps the plot hidden from you, the player, while it works.
 
 You describe the story you want in a few sentences, in any language, and answer some short questions about your preferences. The app then writes the whole adventure:
 
