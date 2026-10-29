@@ -2,6 +2,8 @@ import type { AdventurePackage, CardDraft, LorebookDraft, Requirements } from "@
 import type { Embedder } from "../generation/embeddings.ts";
 import type { Decider } from "../generation/decisions.ts";
 import { createHash } from "node:crypto";
+import { existsSync } from "node:fs";
+import { join } from "node:path";
 import sharp from "sharp";
 import type { PortraitSettings } from "@adv/shared";
 import type { ImageGenerator } from "../generation/images.ts";
@@ -610,6 +612,8 @@ export function buildStages(requirements: Requirements, plan: Plan | null, portr
 export interface AvatarOutput extends PortraitOutput {
   /** Vision check against Appearance and style: passed, kept after a failed retry, or not possible. */
   check: "match" | "mismatch" | "unchecked";
+  /** Hash of the portrait prompt: an unchanged look keeps the image when other card text changes. */
+  basedOn?: string;
 }
 
 const portraitSummary = (o: unknown) => {
@@ -630,6 +634,10 @@ const portraitCheckSchema = z.object({
 async function renderPortrait(ctx: StageContext, stageId: string, fileKey: string, subject: PortraitSubject): Promise<AvatarOutput> {
   if (!ctx.images) throw new GenerationError("No image model is assigned.", "not-assigned");
   const basePrompt = portraitPrompt(ctx.requirements, ctx.portraits.settings, subject);
+  const basedOn = createHash("sha256").update(basePrompt).digest("hex");
+  // An audit fix to the card's backstory or voice must not buy a new image of the same person.
+  const prior = ctx.previousOutput<AvatarOutput>(stageId);
+  if (prior?.basedOn === basedOn && existsSync(join(ctx.portraits.dir, prior.file))) return prior;
   let prompt = basePrompt;
   let check: AvatarOutput["check"] = "unchecked";
   let image = await ctx.images.portrait(prompt, ctx.projectId, stageId);
@@ -668,7 +676,7 @@ Reply with ONLY JSON: {"matches": true, "problems": ["short, concrete difference
     image = await ctx.images.portrait(prompt, ctx.projectId, stageId);
   }
   const saved = await savePortrait(ctx.portraits.dir, ctx.projectId, fileKey, image.png);
-  return { ...saved, width: image.width, height: image.height, check };
+  return { ...saved, width: image.width, height: image.height, check, basedOn };
 }
 
 /** Stages the audit can name as targets, with labels that show only what the player may see. */

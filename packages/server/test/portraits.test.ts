@@ -48,6 +48,7 @@ const stageOf = (r: RecordedRequest) => {
 
 async function setup(options: { check?: (n: number) => string } = {}) {
   let checks = 0;
+  const cardCalls = new Map<string, number>();
   const fake = fakeFetch({
     "GET /models": () => ({ json: { data: [{ id: "m1" }] } }),
     "GET /image-models": () => ({ json: { data: [{ id: "img1" }] } }),
@@ -58,7 +59,7 @@ async function setup(options: { check?: (n: number) => string } = {}) {
       const content =
         stage === "portrait-check"
           ? (options.check?.(++checks) ?? JSON.stringify({ matches: true, problems: [] }))
-          : JSON.stringify(stage === "card" ? f.cards[sub!] : stage === "lorebook" ? f.lorebooks[sub!] : f[stage]);
+          : JSON.stringify(stage === "card" ? revisedCard(f.cards[sub!], cardCalls.set(sub!, (cardCalls.get(sub!) ?? 0) + 1).get(sub!)!) : stage === "lorebook" ? f.lorebooks[sub!] : f[stage]);
       return { json: { choices: [{ message: { content } }] } };
     },
   });
@@ -78,6 +79,9 @@ async function setup(options: { check?: (n: number) => string } = {}) {
   const chats = () => fake.requests.filter((r) => r.url.includes("chat/completions"));
   return { id, dataDir, images, chats };
 }
+
+/** Later rewrites of a card change its backstory but not its looks, like an audit fix does. */
+const revisedCard = (card: Record<string, unknown>, call: number) => (call === 1 ? card : { ...card, backstory: `${card.backstory} Revision ${call}.` });
 
 async function run(id: string): Promise<GenerationState> {
   await app.inject({ method: "POST", url: `/api/projects/${id}/generation/start`, headers: write, payload: { confirmUsage: true } });
@@ -169,6 +173,23 @@ describe("portrait stages", () => {
     expect(off.stages.some((s) => s.id.startsWith("avatar:"))).toBe(false);
     const zip = readZip((await app.inject({ method: "GET", url: `/api/projects/${id}/export`, headers: { host } })).rawPayload);
     expect(JSON.parse(zip.get("the-lamp-beneath-the-pier/characters/probe-alpha.marinara.json")!.toString()).data.avatar).toBeUndefined();
+  });
+
+  it("keeps a portrait when a rewrite leaves the character's looks alone, and redraws it on request", async () => {
+    const { id, images, chats } = await setup();
+    await run(id);
+    expect(images()).toHaveLength(3);
+    const alphaCards = () => chats().filter((r) => stageOf(r).stage === "card" && stageOf(r).sub === "alpha").length;
+    await app.inject({ method: "POST", url: `/api/projects/${id}/generation/stages/card%3Aalpha/retry`, headers: write, payload: { confirmUsage: true } });
+    await (app as unknown as { pipeline: Pipeline }).pipeline.idle(id);
+    const after = (await app.inject({ method: "GET", url: `/api/projects/${id}/generation`, headers: { host } })).json() as GenerationState;
+    expect(alphaCards()).toBe(2);
+    expect(after.ready).toBe(true);
+    expect(images()).toHaveLength(3);
+    // Regenerate on the portrait itself still draws a new one.
+    await app.inject({ method: "POST", url: `/api/projects/${id}/generation/stages/avatar%3Aalpha/retry`, headers: write, payload: { confirmUsage: true } });
+    await (app as unknown as { pipeline: Pipeline }).pipeline.idle(id);
+    expect(images()).toHaveLength(4);
   });
 
   it("deletes portrait files with the project", async () => {
